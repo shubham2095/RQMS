@@ -117,6 +117,13 @@ Sirf commands ya suggested commit message batao, user khud chalayega.
 
 Har screen/route sahi role/permission se guard karo. Employee ko sirf apna kaam dikhe.
 
+**Auth implementation (Phase 1 — done):**
+- Backend: `auth` middleware (Bearer JWT -> `req.user = { id, name, email, roles[{slug,name}], permissions[slugs] }`, DB se har request par fresh), phir `requireRole(...slugs)` / `requirePermission(...slugs)` — **any-of**, `super_admin` hamesha bypass. Naya route: `router.get('/x', auth, requirePermission('quarter.manage'), controller.x)`.
+- Roles/permissions seed: `server/seeders/001-roles-permissions.js` (matrix yahin). Naya permission = seeder/migration mein add karo.
+- Login abhi sirf **email** se. `employee_id` login Phase 2 mein (`authService.login` mein).
+- Frontend: `useAuth()` -> `{ user, hasRole, hasPermission, login, logout }`; `ProtectedRoute` (optional `roles`/`permissions`); nav + routes `client/src/utils/navItems.js` se. Naya screen = `navItems` mein entry (permissions/roles ke saath) + real page.
+- Demo users (dev only): `npm run db:seed` print karta hai (`*@rqms.test`).
+
 ---
 
 ## 6. State machines (inhe exactly follow karo)

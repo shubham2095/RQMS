@@ -7,3 +7,6 @@ uploads/*
 certificates/*
 !uploads/.gitkeep
 !certificates/.gitkeep
+
+CLAUDE.md
+RQMS_BUILD_PLAN.md
