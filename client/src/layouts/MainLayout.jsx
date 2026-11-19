@@ -1,6 +1,6 @@
 import { Link, Outlet } from 'react-router-dom';
 
-function Layout() {
+function MainLayout() {
   return (
     <div className="layout">
       <header className="header">
@@ -16,4 +16,4 @@ function Layout() {
   );
 }
 
-export default Layout;
+export default MainLayout;

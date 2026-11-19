@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '../api/axios';
+import api from '../services/axios';
 
 function Home() {
   const [status, setStatus] = useState('checking...');

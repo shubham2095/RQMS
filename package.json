@@ -1,0 +1,22 @@
+{
+  "name": "rqms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Railway Quarter Management System",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "npm start -w server",
+    "db:create": "node server/utils/dbTasks.js create",
+    "db:migrate": "node server/utils/dbTasks.js migrate",
+    "db:seed": "node server/utils/dbTasks.js seed",
+    "db:reset": "node server/utils/dbTasks.js reset"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}

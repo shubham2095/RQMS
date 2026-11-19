@@ -20,27 +20,47 @@ Do core flows:
 
 ## 2. Tech stack
 
-- **Frontend:** React (Vite) + React Router. Plain JS (TypeScript nahi, jab tak maang na ho).
-- **Backend:** Node.js + Express.
-- **Database:** MySQL (`mysql2/promise`, connection pool). Raw SQL migrations — koi heavy ORM nahi (simple + transparent). Transactions zaroori jagah use karo (allotment, vacation complete).
-- **Auth:** JWT (access token), role-based route guards dono taraf (backend middleware + frontend route protection).
-- **File storage:** uploaded documents aur generated certificates disk par (`/uploads`, `/certificates`), DB mein sirf path.
-- **PDF:** certificates server-side generate (e.g. `pdfkit`), file path DB mein.
+Structure "nidan" project se match karta hai — saare future phases isi ko follow karein.
+
+- **Frontend:** React (Vite) + React Router + axios. Plain JS (TypeScript nahi, jab tak maang na ho).
+- **Backend:** Node.js + Express (CommonJS), **flat** `server/` folder (`src/` nahi).
+- **Database:** MySQL via **Sequelize** (ORM, `mysql2` driver). Migrations aur seeders **umzug** se (`.js` files, `queryInterface`). `underscored: true` — columns snake_case. Transactions `sequelize.transaction()` se zaroori jagah (allotment, vacation complete).
+- **Validation:** **zod** (request body/query schemas `server/validators/` mein).
+- **Auth:** JWT (access token) + `bcryptjs` password hashing, role-based route guards dono taraf (backend middleware + frontend route protection). `cookie-parser` available (cookie-based token chahiye to).
+- **Server hardening:** `helmet`, `compression`, `express-rate-limit` (`server/server.js` mein), `cors`.
+- **Dates:** `dayjs` (retention/overstay/age calculations).
+- **File storage:** uploaded documents aur generated certificates disk par (`/uploads`, `/certificates` — repo root), DB mein sirf path. Upload: `multer`.
+- **PDF:** certificates server-side generate (`pdfkit`), file path DB mein.
 - **Deploy:** GitHub → Hostinger Cloud Hosting (Node app + MySQL).
 
-### Backend folder structure (Laravel reference ke service pattern ko mirror karo)
+### Run everything from the ROOT (npm workspaces: `client` + `server`)
+Alag `cd server` / `cd client` ki zaroorat nahi. Root par ek baar `npm install`, phir:
+```
+npm run dev         # server + client dono (concurrently)
+npm run build       # client build
+npm start           # server (production)
+npm run db:create   # CREATE DATABASE rqms
+npm run db:migrate  # umzug: server/migrations/*.js
+npm run db:seed     # umzug: server/seeders/*.js
+npm run db:reset    # drop + create + migrate + seed (production mein blocked)
+```
+Env: `server/.env` (template `server/.env.example`), `server/config/env.js` use karke load hota hai. DB tasks: `server/utils/dbTasks.js`.
+
+### Backend folder structure (flat)
 ```
 /server
-  /src
-    /config        -> db pool, rqms rules (points/eligibility/retention)
-    /db/migrations -> .sql files (ordered)
-    /middleware    -> auth, requireRole, requirePermission, auditRequest
-    /routes        -> express routers (ek module = ek router)
-    /controllers   -> thin: request parse + response, logic services ko
-    /services      -> business logic (eligibility, priority, allotment, vacation, retirement, certificate, notification, audit)
-    /utils
-    app.js
-    server.js
+  server.js        -> express app setup (helmet, cors, rate-limit, routes, error handler) + listen
+  .env  .env.example
+  /config          -> env.js, db.js (Sequelize instance), rqms.js (points/eligibility/retention/clearance rules)
+  /controllers     -> thin: request parse + response, logic services ko
+  /middleware      -> auth, requireRole, requirePermission, auditRequest
+  /migrations      -> umzug .js migrations (ordered by filename: 001-xxx.js ...)
+  /models          -> Sequelize models + associations (index.js)
+  /routes          -> express routers (ek module = ek router)
+  /seeders         -> umzug .js seeders (roles, permissions, demo data)
+  /services        -> business logic (eligibility, priority, allotment, vacation, retirement, certificate, notification, audit)
+  /utils           -> dbTasks.js (create/migrate/seed/reset) + helpers
+  /validators      -> zod schemas
 /uploads
 /certificates
 ```
@@ -48,12 +68,15 @@ Do core flows:
 ### Frontend folder structure
 ```
 /client
+  /public          -> fonts/, images/
   /src
-    /api        -> axios instance + per-module calls
-    /auth       -> context, useAuth, ProtectedRoute
-    /components -> shared UI
-    /pages      -> role-wise screens (dashboard, applications, quarters, allotments, vacations, admin...)
-    /lib
+    /components    -> shared UI
+    /context       -> AuthContext etc.
+    /hooks         -> useAuth ...
+    /layouts       -> MainLayout (header + content), role layouts
+    /pages         -> role-wise screens (dashboard, applications, quarters, allotments, vacations, admin...)
+    /services      -> axios instance (axios.js) + per-module API calls
+    /utils
     App.jsx  main.jsx
 ```
 
@@ -67,6 +90,8 @@ Do core flows:
 - Pure functions jahan possible ho (points/eligibility engine ko pure + testable banao).
 - Clear naam, chhote functions, early returns. Fancy abstractions se bacho.
 - Errors: service `throw` kare, controller catch karke clean JSON error bheje.
+- **DB:** schema sirf umzug migrations se badle (`server/migrations/`), models `server/models/` mein. Tables ke naam explicit `tableName` (snake_case, section 8 wale). Seed data `server/seeders/` mein. Multi-step writes `sequelize.transaction()` mein.
+- **Validation:** har request body/query zod schema (`server/validators/`) se validate ho, controller mein parse, fail par 400 + clean JSON.
 
 ---
 
@@ -116,7 +141,7 @@ VacationTrigger = transfer/retirement/resignation/death/voluntary
 
 ---
 
-## 7. Business rules (config-driven — `server/src/config/rqms.js`)
+## 7. Business rules (config-driven — `server/config/rqms.js`)
 
 ### Priority points (higher = behtar rank)
 - Essential service: **+50**
