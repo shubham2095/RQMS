@@ -12,6 +12,8 @@ const Allotment = require('./Allotment');
 const Occupancy = require('./Occupancy');
 const Document = require('./Document');
 const Certificate = require('./Certificate');
+const VacationRequest = require('./VacationRequest');
+const VacationClearance = require('./VacationClearance');
 
 // User <-> Role  (role_user)
 User.belongsToMany(Role, {
@@ -95,6 +97,26 @@ Allotment.hasMany(Certificate, {
   scope: { certifiable_type: 'Allotment' },
 });
 
+// ---- Phase 4: vacation flow ----
+
+VacationRequest.belongsTo(Allotment, { as: 'allotment', foreignKey: 'allotment_id' });
+Allotment.hasMany(VacationRequest, { as: 'vacation_requests', foreignKey: 'allotment_id' });
+VacationRequest.belongsTo(Quarter, { as: 'quarter', foreignKey: 'quarter_id' });
+VacationRequest.belongsTo(EmployeeProfile, { as: 'employee', foreignKey: 'employee_profile_id' });
+EmployeeProfile.hasMany(VacationRequest, { as: 'vacation_requests', foreignKey: 'employee_profile_id' });
+
+VacationRequest.hasMany(VacationClearance, { as: 'clearances', foreignKey: 'vacation_request_id' });
+VacationClearance.belongsTo(VacationRequest, { as: 'request', foreignKey: 'vacation_request_id' });
+VacationClearance.belongsTo(User, { as: 'handler', foreignKey: 'handled_by' });
+
+// Polymorphic: certificates (VacationRequest) — Phase 3 ke Allotment certificates jaisa
+VacationRequest.hasMany(Certificate, {
+  as: 'certificates',
+  foreignKey: 'certifiable_id',
+  constraints: false,
+  scope: { certifiable_type: 'VacationRequest' },
+});
+
 module.exports = {
   sequelize,
   User,
@@ -109,4 +131,6 @@ module.exports = {
   Occupancy,
   Document,
   Certificate,
+  VacationRequest,
+  VacationClearance,
 };

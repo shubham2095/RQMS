@@ -16,6 +16,7 @@ const applicationRoutes = require('./routes/applications');
 const allotmentRoutes = require('./routes/allotments');
 const waitingListRoutes = require('./routes/waitingList');
 const fileRoutes = require('./routes/files');
+const vacationRoutes = require('./routes/vacations');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -50,6 +51,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/allotments', allotmentRoutes);
 app.use('/api/waiting-list', waitingListRoutes);
+app.use('/api/vacations', vacationRoutes);
 app.use('/api', fileRoutes);
 
 // Unknown API routes

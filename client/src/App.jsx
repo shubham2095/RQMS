@@ -15,6 +15,9 @@ import ApplicationDetail from './pages/ApplicationDetail';
 import MyAllotment from './pages/MyAllotment';
 import Allotments from './pages/Allotments';
 import WaitingList from './pages/WaitingList';
+import VacationRequest from './pages/VacationRequest';
+import VacationClearances from './pages/VacationClearances';
+import VacationDetail from './pages/VacationDetail';
 import { navItems } from './utils/navItems';
 
 // Dashboard alag route hai. Jin nav items ka real page ban gaya wo yahan map hai;
@@ -29,6 +32,8 @@ const realPages = {
   '/my-allotment': MyAllotment,
   '/allotments': Allotments,
   '/waiting-list': WaitingList,
+  '/vacations/new': VacationRequest,
+  '/vacations': VacationClearances,
 };
 const guardedItems = navItems.filter((item) => item.to !== '/dashboard');
 
@@ -66,6 +71,7 @@ function App() {
             ))}
             {/* Detail: server owner/staff scope karta hai (baaki ko 404) */}
             <Route path="/applications/:id" element={<ApplicationDetail />} />
+            <Route path="/vacations/:id" element={<VacationDetail />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

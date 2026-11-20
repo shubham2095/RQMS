@@ -60,6 +60,35 @@ const enums = {
     'withdrawn',
   ],
   allotmentStatuses: ['offered', 'accepted', 'rejected', 'possession_taken', 'vacated'],
+  // 'cleared' enum mein hai par kabhi save nahi hota (last approval par complete() usi transaction mein chalta hai)
+  vacationStatuses: ['submitted', 'in_clearance', 'cleared', 'completed', 'rejected'],
+  clearanceStatuses: ['pending', 'approved', 'rejected'],
+};
+
+// Allotment "live" hai (offer se possession tak) — 'allotted' application tab tak open maani jati hai.
+const liveAllotmentStatuses = ['offered', 'accepted', 'possession_taken'];
+
+// Har clearance step ko kaun approve/reject kar sakta hai (permission, CLAUDE.md section 5). super_admin bypass.
+const vacationStepPermissions = {
+  clerk_inspection: 'vacation.clerk_inspection',
+  electrical: 'vacation.electrical',
+  water: 'vacation.water',
+  accounts: 'vacation.accounts',
+  estate_officer: 'vacation.estate_officer',
+};
+
+const vacationStepTitles = {
+  clerk_inspection: 'Clerk inspection',
+  electrical: 'Electrical clearance',
+  water: 'Water clearance',
+  accounts: 'Accounts clearance',
+  estate_officer: 'Estate Officer approval',
+};
+
+// Jin steps par approve karne par apna certificate bhi nikalta hai
+const vacationStepCertificates = {
+  electrical: 'ELECTRICAL_CLEARANCE',
+  water: 'WATER_CLEARANCE',
 };
 
 // In statuses wali application "open" hai — employee naya apply nahi kar sakta.
@@ -77,6 +106,12 @@ const certificateTypes = {
   ALLOTMENT_ORDER: { prefix: 'ALO', title: 'Allotment Order' },
   POSSESSION_LETTER: { prefix: 'POL', title: 'Possession Letter' },
   OCCUPANCY_CERTIFICATE: { prefix: 'OCC', title: 'Occupancy Certificate' },
+  // Vacation flow
+  ELECTRICAL_CLEARANCE: { prefix: 'ELC', title: 'Electrical Clearance Certificate' },
+  WATER_CLEARANCE: { prefix: 'WTC', title: 'Water Clearance Certificate' },
+  VACATION_NOC: { prefix: 'NOC', title: 'Vacation No Objection Certificate' },
+  NO_DUE_CERTIFICATE: { prefix: 'NDC', title: 'No Due Certificate' },
+  HANDOVER_CERTIFICATE: { prefix: 'HOC', title: 'Quarter Handover Certificate' },
 };
 
 // Application ke saath documents upload ki limits
@@ -95,9 +130,13 @@ module.exports = {
   eligibility,
   retention,
   vacationClearanceSteps,
+  vacationStepPermissions,
+  vacationStepTitles,
+  vacationStepCertificates,
   enums,
   manualQuarterStatuses,
   openApplicationStatuses,
+  liveAllotmentStatuses,
   certificateTypes,
   uploads,
 };

@@ -1,7 +1,15 @@
 const fs = require('fs');
 const path = require('path');
-const { Document, Certificate, QuarterApplication, Allotment, EmployeeProfile } = require('../models');
+const {
+  Document,
+  Certificate,
+  QuarterApplication,
+  Allotment,
+  VacationRequest,
+  EmployeeProfile,
+} = require('../models');
 const { uploadsDir, certificatesDir } = require('../config/storage');
+const { vacationStepPermissions } = require('../config/rqms');
 const { hasAnyPermission } = require('./userAccessService');
 const httpError = require('../utils/httpError');
 
@@ -33,19 +41,23 @@ async function getDocumentFile(documentId, actor) {
   return resolveFile(uploadsDir, document.path, document.original_name, document.mime);
 }
 
-// Certificate (Allotment ke): allotment ka owner ya staff (allotment.approve / possession).
+// Certificate kis cheez ka hai (certifiable_type) -> uska model + kaun staff dekh sakta hai.
+// Owner (employee) hamesha dekh sakta hai.
+const certificateSources = {
+  Allotment: { model: Allotment, staffPermissions: ['allotment.approve', 'allotment.possession'] },
+  VacationRequest: { model: VacationRequest, staffPermissions: Object.values(vacationStepPermissions) },
+};
+
 async function getCertificateFile(certificateId, actor) {
   const certificate = await Certificate.findByPk(certificateId);
-  if (!certificate || certificate.certifiable_type !== 'Allotment' || !certificate.file_path) {
-    throw httpError(404, 'Certificate not found');
-  }
+  const source = certificate && certificateSources[certificate.certifiable_type];
+  if (!source || !certificate.file_path) throw httpError(404, 'Certificate not found');
 
-  const allotment = await Allotment.findByPk(certificate.certifiable_id, { attributes: ['id', 'employee_profile_id'] });
-  if (!allotment) throw httpError(404, 'Certificate not found');
+  const owner = await source.model.findByPk(certificate.certifiable_id, { attributes: ['id', 'employee_profile_id'] });
+  if (!owner) throw httpError(404, 'Certificate not found');
 
   const allowed =
-    hasAnyPermission(actor, 'allotment.approve', 'allotment.possession') ||
-    (await ownsProfile(actor, allotment.employee_profile_id));
+    hasAnyPermission(actor, ...source.staffPermissions) || (await ownsProfile(actor, owner.employee_profile_id));
   if (!allowed) throw httpError(404, 'Certificate not found');
 
   return resolveFile(certificatesDir, certificate.file_path, `${certificate.number}.pdf`, 'application/pdf');

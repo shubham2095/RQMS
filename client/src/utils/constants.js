@@ -31,5 +31,28 @@ export const CERTIFICATE_LABELS = {
   ALLOTMENT_ORDER: 'Allotment Order',
   POSSESSION_LETTER: 'Possession Letter',
   OCCUPANCY_CERTIFICATE: 'Occupancy Certificate',
+  ELECTRICAL_CLEARANCE: 'Electrical Clearance',
+  WATER_CLEARANCE: 'Water Clearance',
+  VACATION_NOC: 'Vacation NOC',
+  NO_DUE_CERTIFICATE: 'No Due Certificate',
+  HANDOVER_CERTIFICATE: 'Handover Certificate',
+};
+
+// Vacation flow (server config/rqms.js ke mirror). Order zaroori hai.
+export const VACATION_TRIGGERS = [
+  { value: 'transfer', label: 'Transfer' },
+  { value: 'retirement', label: 'Retirement' },
+  { value: 'resignation', label: 'Resignation' },
+  { value: 'death', label: 'Death' },
+  { value: 'voluntary', label: 'Voluntary' },
+];
+export const VACATION_STATUSES = ['in_clearance', 'completed', 'rejected'];
+export const CLEARANCE_STEPS = ['clerk_inspection', 'electrical', 'water', 'accounts', 'estate_officer'];
+export const CLEARANCE_STEP_LABELS = {
+  clerk_inspection: 'Clerk inspection',
+  electrical: 'Electrical clearance',
+  water: 'Water clearance',
+  accounts: 'Accounts clearance',
+  estate_officer: 'Estate Officer approval',
 };
 export const FAMILY_RELATIONS = ['Spouse', 'Son', 'Daughter', 'Father', 'Mother', 'Other'];

@@ -13,7 +13,7 @@ const eligibilityService = require('./eligibilityService');
 const priorityService = require('./priorityService');
 const waitingListService = require('./waitingListService');
 const { hasAnyPermission } = require('./userAccessService');
-const { openApplicationStatuses } = require('../config/rqms');
+const { openApplicationStatuses, liveAllotmentStatuses } = require('../config/rqms');
 const httpError = require('../utils/httpError');
 const { nextDailyNumber, retryOnUnique } = require('../utils/referenceNumber');
 
@@ -101,10 +101,17 @@ async function apply(actor, data, files = []) {
       // Profile row lock: ek hi employee ke do saath-saath apply serialize ho jayein
       await EmployeeProfile.findByPk(profile.id, lock(transaction));
 
-      const open = await QuarterApplication.findOne({
+      // 'allotted' application tab tak open hai jab tak uski allotment live hai (offer se possession tak).
+      // Quarter khali karne (allotment vacated) ke baad naya apply kar sakte hain.
+      const candidates = await QuarterApplication.findAll({
         where: { employee_profile_id: profile.id, status: { [Op.in]: openApplicationStatuses } },
+        include: [{ model: Allotment, as: 'allotments', attributes: ['id', 'status'] }],
         transaction,
       });
+      const open = candidates.find(
+        (item) =>
+          item.status !== 'allotted' || item.allotments.some((allotment) => liveAllotmentStatuses.includes(allotment.status))
+      );
       if (open) throw httpError(409, `You already have an open application (${open.reference_no}, ${open.status})`);
 
       const now = new Date();
