@@ -12,6 +12,10 @@ const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/profile');
 const quarterRoutes = require('./routes/quarters');
 const adminRoutes = require('./routes/admin');
+const applicationRoutes = require('./routes/applications');
+const allotmentRoutes = require('./routes/allotments');
+const waitingListRoutes = require('./routes/waitingList');
+const fileRoutes = require('./routes/files');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,7 +36,7 @@ app.use(
   '/api',
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 300,
+    limit: Number(process.env.API_RATE_LIMIT) || 300, // requests per 15 min per IP (env se badal sakte hain)
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -43,6 +47,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/quarters', quarterRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/applications', applicationRoutes);
+app.use('/api/allotments', allotmentRoutes);
+app.use('/api/waiting-list', waitingListRoutes);
+app.use('/api', fileRoutes);
 
 // Unknown API routes
 app.use('/api', (req, res) => {

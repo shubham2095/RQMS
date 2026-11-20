@@ -9,6 +9,7 @@ export const navItems = [
   // Employee
   { label: 'My Profile', to: '/profile', roles: ['employee'] },
   { label: 'Apply for Quarter', to: '/applications/new', roles: ['employee'] },
+  { label: 'My Applications', to: '/my-applications', roles: ['employee'] },
   { label: 'My Allotment', to: '/my-allotment', roles: ['employee'] },
   { label: 'Vacation Request', to: '/vacations/new', roles: ['employee'] },
 
@@ -16,6 +17,7 @@ export const navItems = [
   { label: 'Applications', to: '/applications', permissions: ['application.verify', 'application.decide'] },
   // Dekhna: clerk / estate officer / admin. Banana-badalna (quarter.manage) page ke andar check hota hai.
   { label: 'Quarters', to: '/quarters', roles: ['quarter_clerk', 'estate_officer', 'admin'] },
+  { label: 'Waiting List', to: '/waiting-list', roles: ['quarter_clerk', 'estate_officer', 'admin'] },
   { label: 'Allotments', to: '/allotments', permissions: ['allotment.approve', 'allotment.possession'] },
   {
     label: 'Vacation Clearances',

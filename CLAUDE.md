@@ -133,6 +133,17 @@ Har screen/route sahi role/permission se guard karo. Employee ko sirf apna kaam 
 - Frontend: pages `MyProfile`, `Quarters`, `AdminUsers`; `App.jsx` ka `realPages` map nav item -> real page (baaki `ComingSoon`). Dropdown constants `client/src/utils/constants.js` (server enums ke mirror). Error text `utils/getErrorMessage.js`.
 - Demo data (dev only): `employee@rqms.test` ka profile `EMP1001` + 2 family members, 6 sample quarters (I–VI, stations Lucknow / New Delhi, sab vacant).
 
+**Allotment flow (Phase 3 — done):**
+- Application status: `submitted → verified → (run-engine) waitlisted | ineligible → approved → allotted`; `rejected` kahin bhi (allotted se pehle). Clerk (`application.verify`): verify + run-engine (verified/ineligible/waitlisted par chalta hai, dobara chala sakte hain). Estate officer (`application.decide`): approve (sirf waitlisted se) / reject (remarks zaroori).
+- Ek employee ki ek hi open application (`openApplicationStatuses` in config). `service_type`/`category`/`division` apply par snapshot. `waiting_since` = `applied_at`.
+- Engine pure hai: `eligibilityService.evaluate(application, profile, asOf)` aur `priorityService.calculate({service_type, category, medical_ground, date_of_joining, waiting_since}, asOf)` — koi DB nahi. Score run-engine par save hota hai (age/seniority ka daily refresh Phase 5 mein).
+- Waiting list: queue = (quarter_type, station); `priority_score DESC, waiting_since ASC, id ASC`; `waitingListService.place/reRank/remove/queue`. Remove = `is_active=false, rank=NULL` (history rehti hai).
+- Offer (`allotment.approve`): quarter ki queue ka rank-1 entry; **application `approved` na ho to offer refuse (400)** — koi skip nahi hota. Sab `sequelize.transaction` + row locks (quarter, queue). Offer par: quarter `allotted`, application `allotted`, entry hatao + re-rank, ALLOTMENT_ORDER certificate. Employee accept/reject (`respond`): reject par quarter `vacant` + application `rejected` (naya apply kar sakta hai). Possession (`allotment.possession`, sirf accepted par): quarter `occupied` + occupant, occupancy row, `has_active_allotment=true`, POSSESSION_LETTER + OCCUPANCY_CERTIFICATE.
+- Numbers: application `QA-YYYYMMDD-NNNN`, allotment order `AO-YYYYMMDD-NNNN` (daily sequence, `utils/referenceNumber.js`), certificate `ALO|POL|OCC-YYYYMMDD-XXXXXX`.
+- Files: uploads (`documents`, polymorphic) aur certificates (PDF via pdfkit) `config/storage.js` ki dirs mein (`UPLOADS_DIR` / `CERTIFICATES_DIR` env, default repo-root `uploads/` `certificates/`); DB mein relative filename. Download: `GET /api/documents/:id/download`, `GET /api/certificates/:id/download` (owner ya staff). Certificate generate flow ke AAKHIR mein, transaction ke andar.
+- `TODO(Phase 5)` comments services mein: audit log + notification yahin lagenge. JSON columns ke liye `utils/jsonField.js` (MariaDB JSON ko text deta hai).
+- Demo data (dev only): `employee2/3/4@rqms.test` = EMP1002 (essential, SC, ~21 yrs), EMP1003 (GENERAL, ~4 yrs), EMP1004 (OBC, ~16 yrs) — ranking test ke liye. Optional env `API_RATE_LIMIT` (default 300 req / 15 min).
+
 ---
 
 ## 6. State machines (inhe exactly follow karo)

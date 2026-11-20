@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import FormField from '../components/FormField';
+import StatusBadge from '../components/StatusBadge';
 import useAuth from '../hooks/useAuth';
-import { createQuarter, listQuarters, updateQuarter } from '../services/quarterService';
+import {
+  createQuarter,
+  getOfferSuggestion,
+  listQuarters,
+  offerQuarter,
+  updateQuarter,
+} from '../services/quarterService';
 import { MANUAL_QUARTER_STATUSES, QUARTER_STATUSES, QUARTER_TYPES } from '../utils/constants';
 import getErrorMessage from '../utils/getErrorMessage';
 
@@ -31,6 +39,7 @@ function quarterToForm(quarter) {
 function Quarters() {
   const { hasPermission } = useAuth();
   const canManage = hasPermission('quarter.manage');
+  const canOffer = hasPermission('allotment.approve');
 
   const [quarters, setQuarters] = useState([]);
   const [draftFilters, setDraftFilters] = useState(emptyFilters); // form mein jo likha
@@ -43,6 +52,13 @@ function Quarters() {
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Offer: vacant quarter ko queue ke rank-1 (approved) applicant ko
+  const [offerFor, setOfferFor] = useState(null); // quarter
+  const [suggestion, setSuggestion] = useState(null);
+  const [offerBusy, setOfferBusy] = useState(false);
+  const [offerError, setOfferError] = useState('');
+  const [offerDone, setOfferDone] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +113,42 @@ function Quarters() {
   // allotted / occupied wagairah status haath se nahi badalte (allotment flow karta hai)
   const statusLocked =
     editing && editing !== 'new' && !MANUAL_QUARTER_STATUSES.includes(editing.status);
+
+  async function startOffer(quarter) {
+    setOfferFor(quarter);
+    setSuggestion(null);
+    setOfferError('');
+    setOfferDone('');
+    try {
+      setSuggestion(await getOfferSuggestion(quarter.id));
+    } catch (err) {
+      setOfferError(getErrorMessage(err));
+    }
+  }
+
+  function cancelOffer() {
+    setOfferFor(null);
+    setSuggestion(null);
+    setOfferError('');
+  }
+
+  async function confirmOffer() {
+    setOfferBusy(true);
+    setOfferError('');
+    try {
+      const allotment = await offerQuarter(offerFor.id);
+      setOfferDone(
+        `Quarter ${offerFor.quarter_number} offered to ${allotment.employee.user.name} (${allotment.employee.employee_id}). Order ${allotment.allotment_order_no}.`
+      );
+      setOfferFor(null);
+      setSuggestion(null);
+      setReloadCount((count) => count + 1);
+    } catch (err) {
+      setOfferError(getErrorMessage(err));
+    } finally {
+      setOfferBusy(false);
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -203,6 +255,48 @@ function Quarters() {
         </form>
       )}
 
+      {offerDone && (
+        <p className="form-success">
+          {offerDone} <Link to="/allotments">View allotments</Link>
+        </p>
+      )}
+
+      {offerFor && (
+        <div className="card">
+          <h2>
+            Offer quarter {offerFor.quarter_number} (Type {offerFor.quarter_type}, {offerFor.station})
+          </h2>
+          {!suggestion && !offerError && <p className="muted">Checking the waiting list...</p>}
+          {suggestion && suggestion.applicant && (
+            <dl className="details">
+              <dt>Rank 1 applicant</dt>
+              <dd>
+                {suggestion.applicant.name} ({suggestion.applicant.employee_id})
+              </dd>
+              <dt>Priority score</dt>
+              <dd>{suggestion.applicant.priority_score}</dd>
+              <dt>Application</dt>
+              <dd>
+                <Link to={`/applications/${suggestion.applicant.application_id}`}>{suggestion.applicant.reference_no}</Link>{' '}
+                <StatusBadge status={suggestion.applicant.application_status} />
+              </dd>
+            </dl>
+          )}
+          {suggestion && !suggestion.can_offer && <p className="form-error">{suggestion.reason}</p>}
+          {offerError && <p className="form-error">{offerError}</p>}
+          <div className="button-row">
+            {suggestion && suggestion.can_offer && (
+              <button type="button" className="btn" disabled={offerBusy} onClick={confirmOffer}>
+                {offerBusy ? 'Offering...' : `Offer to ${suggestion.applicant.name}`}
+              </button>
+            )}
+            <button type="button" className="btn btn-secondary" onClick={cancelOffer}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       <form className="toolbar" onSubmit={applyFilters}>
         <FormField label="Type">
           <select
@@ -262,7 +356,7 @@ function Quarters() {
               <th>Block / Floor</th>
               <th>Status</th>
               <th>Occupant</th>
-              {canManage && <th />}
+              {(canManage || canOffer) && <th />}
             </tr>
           </thead>
           <tbody>
@@ -277,14 +371,21 @@ function Quarters() {
                   {quarter.block || '-'} / {quarter.floor || '-'}
                 </td>
                 <td>
-                  <span className={`badge badge-${quarter.status}`}>{quarter.status}</span>
+                  <StatusBadge status={quarter.status} />
                 </td>
                 <td>{quarter.current_occupant ? quarter.current_occupant.employee_id : '-'}</td>
-                {canManage && (
-                  <td>
-                    <button type="button" className="btn-link" onClick={() => startEdit(quarter)}>
-                      Edit
-                    </button>
+                {(canManage || canOffer) && (
+                  <td className="actions">
+                    {canManage && (
+                      <button type="button" className="btn-link" onClick={() => startEdit(quarter)}>
+                        Edit
+                      </button>
+                    )}
+                    {canOffer && quarter.status === 'vacant' && (
+                      <button type="button" className="btn-link" onClick={() => startOffer(quarter)}>
+                        Offer
+                      </button>
+                    )}
                   </td>
                 )}
               </tr>

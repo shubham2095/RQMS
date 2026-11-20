@@ -47,6 +47,43 @@ const enums = {
     'under_maintenance',
     'retired_occupancy',
   ],
+  // CLAUDE.md section 6
+  applicationStatuses: [
+    'submitted',
+    'verified',
+    'eligible',
+    'ineligible',
+    'waitlisted',
+    'approved',
+    'allotted',
+    'rejected',
+    'withdrawn',
+  ],
+  allotmentStatuses: ['offered', 'accepted', 'rejected', 'possession_taken', 'vacated'],
+};
+
+// In statuses wali application "open" hai — employee naya apply nahi kar sakta.
+const openApplicationStatuses = [
+  'submitted',
+  'verified',
+  'eligible',
+  'waitlisted',
+  'approved',
+  'allotted',
+];
+
+// Certificate type -> number ka prefix (number = prefix-YYYYMMDD-random)
+const certificateTypes = {
+  ALLOTMENT_ORDER: { prefix: 'ALO', title: 'Allotment Order' },
+  POSSESSION_LETTER: { prefix: 'POL', title: 'Possession Letter' },
+  OCCUPANCY_CERTIFICATE: { prefix: 'OCC', title: 'Occupancy Certificate' },
+};
+
+// Application ke saath documents upload ki limits
+const uploads = {
+  maxFiles: 5,
+  maxFileSizeBytes: 5 * 1024 * 1024,
+  allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'],
 };
 
 // Quarter master screen se sirf yeh statuses haath se badle ja sakte hain.
@@ -60,4 +97,7 @@ module.exports = {
   vacationClearanceSteps,
   enums,
   manualQuarterStatuses,
+  openApplicationStatuses,
+  certificateTypes,
+  uploads,
 };

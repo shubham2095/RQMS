@@ -35,4 +35,9 @@ function isSuperAdmin(user) {
   return user.roles.some((role) => role.slug === SUPER_ADMIN);
 }
 
-module.exports = { loadUserAccess, isSuperAdmin };
+// Koi bhi ek permission ho to true (super_admin ke liye hamesha true). req.user par chalta hai.
+function hasAnyPermission(user, ...slugs) {
+  return isSuperAdmin(user) || user.permissions.some((slug) => slugs.includes(slug));
+}
+
+module.exports = { loadUserAccess, isSuperAdmin, hasAnyPermission };

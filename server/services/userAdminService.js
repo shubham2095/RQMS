@@ -19,7 +19,7 @@ function toSummary(user) {
     is_active: user.is_active,
     employee_id: user.profile ? user.profile.employee_id : null,
     roles: user.roles.map((role) => ({ id: role.id, slug: role.slug, name: role.name })),
-    created_at: user.created_at,
+    created_at: user.createdAt, // model attribute createdAt hai (column created_at)
   };
 }
 

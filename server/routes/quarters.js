@@ -1,5 +1,6 @@
 const express = require('express');
 const quarterController = require('../controllers/quarterController');
+const allotmentController = require('../controllers/allotmentController');
 const auth = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const requirePermission = require('../middleware/requirePermission');
@@ -16,5 +17,9 @@ router.get('/:id', canView, quarterController.getQuarter);
 // Banana/badalna: quarter.manage permission
 router.post('/', requirePermission('quarter.manage'), quarterController.createQuarter);
 router.put('/:id', requirePermission('quarter.manage'), quarterController.updateQuarter);
+
+// Offer: vacant quarter ko queue ke rank-1 (approved) applicant ko — allotment.approve
+router.get('/:id/offer-suggestion', requirePermission('allotment.approve'), allotmentController.offerSuggestion);
+router.post('/:id/offer', requirePermission('allotment.approve'), allotmentController.offerQuarter);
 
 module.exports = router;

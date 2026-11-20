@@ -16,4 +16,20 @@ export const QUARTER_STATUSES = [
 ];
 // Quarter master se haath se set ho sakne wale (baaki allotment flow set karta hai)
 export const MANUAL_QUARTER_STATUSES = ['vacant', 'reserved', 'under_maintenance'];
+export const APPLICATION_STATUSES = [
+  'submitted',
+  'verified',
+  'ineligible',
+  'waitlisted',
+  'approved',
+  'allotted',
+  'rejected',
+  'withdrawn',
+];
+export const ALLOTMENT_STATUSES = ['offered', 'accepted', 'rejected', 'possession_taken', 'vacated'];
+export const CERTIFICATE_LABELS = {
+  ALLOTMENT_ORDER: 'Allotment Order',
+  POSSESSION_LETTER: 'Possession Letter',
+  OCCUPANCY_CERTIFICATE: 'Occupancy Certificate',
+};
 export const FAMILY_RELATIONS = ['Spouse', 'Son', 'Daughter', 'Father', 'Mother', 'Other'];

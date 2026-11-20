@@ -6,6 +6,12 @@ const Permission = require('./Permission');
 const EmployeeProfile = require('./EmployeeProfile');
 const FamilyMember = require('./FamilyMember');
 const Quarter = require('./Quarter');
+const QuarterApplication = require('./QuarterApplication');
+const WaitingListEntry = require('./WaitingListEntry');
+const Allotment = require('./Allotment');
+const Occupancy = require('./Occupancy');
+const Document = require('./Document');
+const Certificate = require('./Certificate');
 
 // User <-> Role  (role_user)
 User.belongsToMany(Role, {
@@ -50,6 +56,45 @@ FamilyMember.belongsTo(EmployeeProfile, { as: 'profile', foreignKey: 'employee_p
 // Quarter -> current occupant (EmployeeProfile)
 Quarter.belongsTo(EmployeeProfile, { as: 'current_occupant', foreignKey: 'current_occupant_id' });
 
+// ---- Phase 3: allotment flow ----
+
+// QuarterApplication
+EmployeeProfile.hasMany(QuarterApplication, { as: 'applications', foreignKey: 'employee_profile_id' });
+QuarterApplication.belongsTo(EmployeeProfile, { as: 'employee', foreignKey: 'employee_profile_id' });
+QuarterApplication.belongsTo(User, { as: 'verifier', foreignKey: 'verified_by' });
+QuarterApplication.belongsTo(User, { as: 'decider', foreignKey: 'decided_by' });
+QuarterApplication.hasOne(WaitingListEntry, { as: 'waiting_entry', foreignKey: 'quarter_application_id' });
+WaitingListEntry.belongsTo(QuarterApplication, { as: 'application', foreignKey: 'quarter_application_id' });
+
+// Allotment
+Allotment.belongsTo(Quarter, { as: 'quarter', foreignKey: 'quarter_id' });
+Quarter.hasMany(Allotment, { as: 'allotments', foreignKey: 'quarter_id' });
+Allotment.belongsTo(QuarterApplication, { as: 'application', foreignKey: 'quarter_application_id' });
+QuarterApplication.hasMany(Allotment, { as: 'allotments', foreignKey: 'quarter_application_id' });
+Allotment.belongsTo(EmployeeProfile, { as: 'employee', foreignKey: 'employee_profile_id' });
+EmployeeProfile.hasMany(Allotment, { as: 'allotments', foreignKey: 'employee_profile_id' });
+Allotment.belongsTo(User, { as: 'approver', foreignKey: 'approved_by' });
+
+// Occupancy
+Occupancy.belongsTo(Quarter, { as: 'quarter', foreignKey: 'quarter_id' });
+Occupancy.belongsTo(Allotment, { as: 'allotment', foreignKey: 'allotment_id' });
+Occupancy.belongsTo(EmployeeProfile, { as: 'employee', foreignKey: 'employee_profile_id' });
+
+// Polymorphic: documents (QuarterApplication) aur certificates (Allotment).
+// constraints:false — DB FK nahi, type + id se judte hain.
+QuarterApplication.hasMany(Document, {
+  as: 'documents',
+  foreignKey: 'documentable_id',
+  constraints: false,
+  scope: { documentable_type: 'QuarterApplication' },
+});
+Allotment.hasMany(Certificate, {
+  as: 'certificates',
+  foreignKey: 'certifiable_id',
+  constraints: false,
+  scope: { certifiable_type: 'Allotment' },
+});
+
 module.exports = {
   sequelize,
   User,
@@ -58,4 +103,10 @@ module.exports = {
   EmployeeProfile,
   FamilyMember,
   Quarter,
+  QuarterApplication,
+  WaitingListEntry,
+  Allotment,
+  Occupancy,
+  Document,
+  Certificate,
 };
