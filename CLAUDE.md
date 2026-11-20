@@ -124,6 +124,15 @@ Har screen/route sahi role/permission se guard karo. Employee ko sirf apna kaam 
 - Frontend: `useAuth()` -> `{ user, hasRole, hasPermission, login, logout }`; `ProtectedRoute` (optional `roles`/`permissions`); nav + routes `client/src/utils/navItems.js` se. Naya screen = `navItems` mein entry (permissions/roles ke saath) + real page.
 - Demo users (dev only): `npm run db:seed` print karta hai (`*@rqms.test`).
 
+**Master data (Phase 2 — done):**
+- Login: ek `identifier` field — email (`@` ho to) ya `employee_id` (`employee_profiles.employee_id`). Employee id mein `@` allowed nahi. Failure par same generic 401 ("Invalid credentials").
+- Tables: `employee_profiles` (user_id unique, employee_id unique, `has_active_allotment` system-managed — profile PUT se nahi badalta), `family_members`, `quarters` (unique station+colony+number). Enums `server/config/rqms.js` mein (`enums.quarterStatuses`, `manualQuarterStatuses`).
+- Quarter status: master screen se sirf `vacant | reserved | under_maintenance` set hote hain; `allotted/occupied/vacation_pending/retired_occupancy` allotment/vacation flow set karega (usi quarter ka status haath se nahi badalta).
+- API: `/api/profile` (self, `auth` only) · `/api/quarters` (GET: role quarter_clerk|estate_officer|admin; POST/PUT: `quarter.manage`) · `/api/admin/users`, `/api/admin/roles` (`users.manage`). Admin user rules: super_admin role sirf super_admin de/badal sakta hai; khud ko deactivate ya apne roles badalna blocked.
+- Validators `server/validators/` (`helpers.js` mein `requiredText/optionalText/optionalValue`: '' -> null). Services 409 throw karte hain unique conflict par (`utils/dbErrors.js`).
+- Frontend: pages `MyProfile`, `Quarters`, `AdminUsers`; `App.jsx` ka `realPages` map nav item -> real page (baaki `ComingSoon`). Dropdown constants `client/src/utils/constants.js` (server enums ke mirror). Error text `utils/getErrorMessage.js`.
+- Demo data (dev only): `employee@rqms.test` ka profile `EMP1001` + 2 family members, 6 sample quarters (I–VI, stations Lucknow / New Delhi, sab vacant).
+
 ---
 
 ## 6. State machines (inhe exactly follow karo)

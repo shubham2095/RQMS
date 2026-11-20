@@ -4,8 +4,8 @@ const { loginSchema } = require('../validators/authValidator');
 
 async function login(req, res, next) {
   try {
-    const { email, password } = parse(loginSchema, req.body);
-    const result = await authService.login(email, password);
+    const { identifier, password } = parse(loginSchema, req.body);
+    const result = await authService.login(identifier, password);
     res.json(result);
   } catch (err) {
     next(err);

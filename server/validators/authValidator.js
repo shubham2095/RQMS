@@ -1,11 +1,12 @@
 const { z } = require('zod');
 
+// identifier = email YA employee_id (ek hi field). Kaun sa hai, authService decide karta hai.
 const loginSchema = z.object({
-  email: z
-    .string('Email is required')
+  identifier: z
+    .string('Email or Employee ID is required')
     .trim()
-    .toLowerCase()
-    .pipe(z.email('Enter a valid email')),
+    .min(1, 'Email or Employee ID is required')
+    .max(255, 'Email or Employee ID is too long'),
   password: z.string('Password is required').min(1, 'Password is required'),
 });
 

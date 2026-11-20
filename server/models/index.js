@@ -3,6 +3,9 @@ const sequelize = require('../config/db');
 const User = require('./User');
 const Role = require('./Role');
 const Permission = require('./Permission');
+const EmployeeProfile = require('./EmployeeProfile');
+const FamilyMember = require('./FamilyMember');
+const Quarter = require('./Quarter');
 
 // User <-> Role  (role_user)
 User.belongsToMany(Role, {
@@ -36,4 +39,23 @@ Permission.belongsToMany(Role, {
   timestamps: false,
 });
 
-module.exports = { sequelize, User, Role, Permission };
+// User <-> EmployeeProfile (ek user ka ek profile)
+User.hasOne(EmployeeProfile, { as: 'profile', foreignKey: 'user_id' });
+EmployeeProfile.belongsTo(User, { as: 'user', foreignKey: 'user_id' });
+
+// EmployeeProfile <-> FamilyMember
+EmployeeProfile.hasMany(FamilyMember, { as: 'family_members', foreignKey: 'employee_profile_id' });
+FamilyMember.belongsTo(EmployeeProfile, { as: 'profile', foreignKey: 'employee_profile_id' });
+
+// Quarter -> current occupant (EmployeeProfile)
+Quarter.belongsTo(EmployeeProfile, { as: 'current_occupant', foreignKey: 'current_occupant_id' });
+
+module.exports = {
+  sequelize,
+  User,
+  Role,
+  Permission,
+  EmployeeProfile,
+  FamilyMember,
+  Quarter,
+};

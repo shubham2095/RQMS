@@ -26,8 +26,8 @@ function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function login(email, password) {
-    const data = await loginRequest(email, password);
+  async function login(identifier, password) {
+    const data = await loginRequest(identifier, password);
     setToken(data.token);
     setLoggedOut(false);
     setUser(data.user);

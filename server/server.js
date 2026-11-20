@@ -9,6 +9,9 @@ const sequelize = require('./config/db');
 
 const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/auth');
+const profileRoutes = require('./routes/profile');
+const quarterRoutes = require('./routes/quarters');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -37,6 +40,9 @@ app.use(
 
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/quarters', quarterRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Unknown API routes
 app.use('/api', (req, res) => {

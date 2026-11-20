@@ -37,7 +37,21 @@ const enums = {
   categories: ['SC', 'ST', 'OBC', 'GENERAL'],
   serviceTypes: ['essential', 'non_essential'],
   vacationTriggers: ['transfer', 'retirement', 'resignation', 'death', 'voluntary'],
+  // CLAUDE.md section 6 — QuarterStatus
+  quarterStatuses: [
+    'vacant',
+    'allotted',
+    'occupied',
+    'vacation_pending',
+    'reserved',
+    'under_maintenance',
+    'retired_occupancy',
+  ],
 };
+
+// Quarter master screen se sirf yeh statuses haath se badle ja sakte hain.
+// Baaki (allotted/occupied/vacation_pending/retired_occupancy) allotment/vacation flow control karta hai.
+const manualQuarterStatuses = ['vacant', 'reserved', 'under_maintenance'];
 
 module.exports = {
   priorityPoints,
@@ -45,4 +59,5 @@ module.exports = {
   retention,
   vacationClearanceSteps,
   enums,
+  manualQuarterStatuses,
 };

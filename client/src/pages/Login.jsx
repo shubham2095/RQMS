@@ -2,13 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/axios';
 import useAuth from '../hooks/useAuth';
-
-function getErrorMessage(err) {
-  if (!err.response) return 'Cannot reach the server. Please try again.';
-  const data = err.response.data || {};
-  if (data.details && data.details.length > 0) return data.details[0].message;
-  return data.error || 'Login failed';
-}
+import getErrorMessage from '../utils/getErrorMessage';
 
 function Login() {
   const { user, loading, login } = useAuth();
@@ -16,7 +10,7 @@ function Login() {
   const location = useLocation();
   const from = (location.state && location.state.from) || '/dashboard';
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -37,10 +31,10 @@ function Login() {
     setError('');
     setSubmitting(true);
     try {
-      await login(email, password);
+      await login(identifier, password);
       navigate(from, { replace: true });
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError(getErrorMessage(err, 'Login failed'));
     } finally {
       setSubmitting(false);
     }
@@ -52,13 +46,13 @@ function Login() {
         <h1>RQMS</h1>
         <p className="muted">Railway Quarter Management System</p>
 
-        <label htmlFor="email">Email</label>
+        <label htmlFor="identifier">Email or Employee ID</label>
         <input
-          id="email"
-          type="email"
+          id="identifier"
+          type="text"
           autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           required
         />
 

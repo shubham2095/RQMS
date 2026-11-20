@@ -1,7 +1,8 @@
 import api from './axios';
 
-export async function loginRequest(email, password) {
-  const res = await api.post('/auth/login', { email, password });
+// identifier = email ya employee id
+export async function loginRequest(identifier, password) {
+  const res = await api.post('/auth/login', { identifier, password });
   return res.data; // { token, user }
 }
 

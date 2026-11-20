@@ -14,7 +14,8 @@ export const navItems = [
 
   // Staff (permission matrix — CLAUDE.md section 5)
   { label: 'Applications', to: '/applications', permissions: ['application.verify', 'application.decide'] },
-  { label: 'Quarters', to: '/quarters', permissions: ['quarter.manage'] },
+  // Dekhna: clerk / estate officer / admin. Banana-badalna (quarter.manage) page ke andar check hota hai.
+  { label: 'Quarters', to: '/quarters', roles: ['quarter_clerk', 'estate_officer', 'admin'] },
   { label: 'Allotments', to: '/allotments', permissions: ['allotment.approve', 'allotment.possession'] },
   {
     label: 'Vacation Clearances',

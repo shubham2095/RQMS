@@ -1,16 +1,28 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+const { User, EmployeeProfile } = require('../models');
 const { jwtSecret, jwtExpiresIn } = require('../config/auth');
 const { loadUserAccess } = require('./userAccessService');
 const httpError = require('../utils/httpError');
 
-const INVALID_LOGIN = 'Invalid email or password';
+const INVALID_LOGIN = 'Invalid credentials';
 
-// Login abhi sirf EMAIL se. Phase 2 mein employee_id se login yahan add hoga
-// (employee_profiles table ke saath) — abhi nahi.
-async function login(email, password) {
-  const user = await User.scope('withPassword').findOne({ where: { email } });
+// identifier me '@' ho to email, warna employee_id (employee ids me '@' allowed nahi — profileValidator).
+async function findUserByIdentifier(identifier) {
+  const withPassword = User.scope('withPassword');
+
+  if (identifier.includes('@')) {
+    return withPassword.findOne({ where: { email: identifier.toLowerCase() } });
+  }
+
+  const profile = await EmployeeProfile.findOne({ where: { employee_id: identifier } });
+  if (!profile) return null;
+  return withPassword.findByPk(profile.user_id);
+}
+
+// Login email YA employee_id se. Har failure par same generic 401.
+async function login(identifier, password) {
+  const user = await findUserByIdentifier(identifier);
   if (!user) throw httpError(401, INVALID_LOGIN);
 
   const passwordOk = await bcrypt.compare(password, user.password_hash);

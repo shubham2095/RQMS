@@ -6,10 +6,24 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ComingSoon from './pages/ComingSoon';
 import NotFound from './pages/NotFound';
+import MyProfile from './pages/MyProfile';
+import Quarters from './pages/Quarters';
+import AdminUsers from './pages/AdminUsers';
 import { navItems } from './utils/navItems';
 
-// Dashboard real page hai; baaki nav items abhi placeholder (apne role/permission guard ke saath).
-const placeholderItems = navItems.filter((item) => item.to !== '/dashboard');
+// Dashboard alag route hai. Jin nav items ka real page ban gaya wo yahan map hai;
+// baaki abhi ComingSoon placeholder (apne role/permission guard ke saath).
+const realPages = {
+  '/profile': MyProfile,
+  '/quarters': Quarters,
+  '/admin/users': AdminUsers,
+};
+const guardedItems = navItems.filter((item) => item.to !== '/dashboard');
+
+function pageFor(item) {
+  const Page = realPages[item.to];
+  return Page ? <Page /> : <ComingSoon title={item.label} />;
+}
 
 function App() {
   return (
@@ -27,13 +41,13 @@ function App() {
           >
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            {placeholderItems.map((item) => (
+            {guardedItems.map((item) => (
               <Route
                 key={item.to}
                 path={item.to}
                 element={
                   <ProtectedRoute roles={item.roles} permissions={item.permissions}>
-                    <ComingSoon title={item.label} />
+                    {pageFor(item)}
                   </ProtectedRoute>
                 }
               />
