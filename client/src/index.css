@@ -648,3 +648,71 @@ h3 {
   justify-content: space-between;
   gap: 12px;
 }
+
+/* ---- Phase 5b: dashboard, reports, documents ---- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  display: block;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-top: 4px solid #0b3d91;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.stat-link:hover {
+  background: #f0f5ff;
+}
+
+.stat-value {
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stat-label {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.stat-good {
+  border-top-color: #16a34a;
+}
+
+.stat-warn {
+  border-top-color: #d97706;
+}
+
+.stat-danger {
+  border-top-color: #b91c1c;
+}
+
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0 20px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+
+.doc-details {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+
+.detail-row {
+  display: contents;
+}

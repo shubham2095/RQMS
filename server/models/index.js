@@ -126,6 +126,10 @@ RetirementRecord.belongsTo(EmployeeProfile, { as: 'employee', foreignKey: 'emplo
 EmployeeProfile.hasMany(RetirementRecord, { as: 'retirement_records', foreignKey: 'employee_profile_id' });
 RetirementRecord.belongsTo(Allotment, { as: 'allotment', foreignKey: 'allotment_id' });
 
+// Phase 5b: documents / certificates list mein uploader / issuer ka naam
+Document.belongsTo(User, { as: 'uploader', foreignKey: 'uploaded_by', constraints: false });
+Certificate.belongsTo(User, { as: 'issuer', foreignKey: 'issued_by', constraints: false });
+
 AuditLog.belongsTo(User, { as: 'user', foreignKey: 'user_id' });
 NotificationLog.belongsTo(User, { as: 'user', foreignKey: 'user_id' });
 

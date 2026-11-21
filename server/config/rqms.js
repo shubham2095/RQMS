@@ -177,6 +177,19 @@ const uploads = {
   allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'],
 };
 
+// Documents / certificates kaun dekh-download kar sakta hai (staff permissions; super_admin bypass).
+// Lists AUR download/metadata, dono yahin se — isliye kabhi alag nahi padte. Owner (employee) apna hamesha dekhta hai.
+// `users.manage` = admin: management pages ke download links kaam karein.
+const fileAccess = {
+  documents: {
+    QuarterApplication: ['application.verify', 'application.decide', 'users.manage'],
+  },
+  certificates: {
+    Allotment: ['allotment.approve', 'allotment.possession', 'users.manage'],
+    VacationRequest: [...Object.values(vacationStepPermissions), 'users.manage'],
+  },
+};
+
 // Quarter master screen se sirf yeh statuses haath se badle ja sakte hain.
 // Baaki (allotted/occupied/vacation_pending/retired_occupancy) allotment/vacation flow control karta hai.
 const manualQuarterStatuses = ['vacant', 'reserved', 'under_maintenance'];
@@ -197,4 +210,5 @@ module.exports = {
   liveAllotmentStatuses,
   certificateTypes,
   uploads,
+  fileAccess,
 };

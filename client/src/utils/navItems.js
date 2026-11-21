@@ -6,6 +6,9 @@
 export const navItems = [
   { label: 'Dashboard', to: '/dashboard' },
   { label: 'Notifications', to: '/notifications' }, // sab logged-in users (apni)
+  // Documents / Certificates: sab logged-in users — server scope karta hai (employee = apne, staff = jo unke haath mein)
+  { label: 'Documents', to: '/documents' },
+  { label: 'Certificates', to: '/certificates' },
 
   // Employee
   { label: 'My Profile', to: '/profile', roles: ['employee'] },

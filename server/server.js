@@ -20,6 +20,9 @@ const vacationRoutes = require('./routes/vacations');
 const retirementRoutes = require('./routes/retirements');
 const auditRoutes = require('./routes/audit');
 const notificationRoutes = require('./routes/notifications');
+const documentRoutes = require('./routes/documents');
+const certificateRoutes = require('./routes/certificates');
+const reportRoutes = require('./routes/reports');
 const { requestContext } = require('./middleware/requestContext');
 
 const app = express();
@@ -60,6 +63,9 @@ app.use('/api/vacations', vacationRoutes);
 app.use('/api/retirements', retirementRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/documents', documentRoutes); // fileRoutes (download) se PEHLE: ye sirf '/' aur '/:id' match karte hain
+app.use('/api/certificates', certificateRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api', fileRoutes);
 
 // Unknown API routes

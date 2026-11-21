@@ -17,6 +17,8 @@ const notificationService = require('./notificationService');
 const { hasAnyPermission } = require('./userAccessService');
 const { openApplicationStatuses, liveAllotmentStatuses } = require('../config/rqms');
 const httpError = require('../utils/httpError');
+const { sha256File } = require('../utils/fileHash');
+const { removeFiles } = require('../utils/files');
 const { nextDailyNumber, retryOnUnique } = require('../utils/referenceNumber');
 
 const ATTACHMENT_CATEGORY = 'application_attachment';
@@ -98,10 +100,31 @@ async function get(id, actor) {
 
 // ---------- apply ----------
 
+// Har file ka sha256. Ek hi submission mein same content wali file dobara aaye to usse store nahi karte
+// (dedupe: file disk se hata do, naam duplicates mein) — application fail nahi hoti.
+async function hashUploads(files) {
+  const unique = [];
+  const duplicates = [];
+  const seen = new Set();
+  for (const file of files) {
+    const hash = await sha256File(file.path);
+    if (seen.has(hash)) {
+      duplicates.push(file.originalname);
+      removeFiles([file]);
+    } else {
+      seen.add(hash);
+      unique.push({ file, hash });
+    }
+  }
+  return { unique, duplicates };
+}
+
 // data: validated body. files: multer files (already saved on disk).
 async function apply(actor, data, files = []) {
   const profile = await findOwnProfile(actor);
   if (!profile) throw httpError(400, 'Save your profile before applying for a quarter');
+
+  const { unique, duplicates } = await hashUploads(files);
 
   const created = await retryOnUnique(() =>
     sequelize.transaction(async (transaction) => {
@@ -142,9 +165,9 @@ async function apply(actor, data, files = []) {
         { transaction }
       );
 
-      if (files.length > 0) {
+      if (unique.length > 0) {
         await Document.bulkCreate(
-          files.map((file) => ({
+          unique.map(({ file, hash }) => ({
             documentable_type: 'QuarterApplication',
             documentable_id: application.id,
             category: ATTACHMENT_CATEGORY,
@@ -154,6 +177,7 @@ async function apply(actor, data, files = []) {
             mime: file.mimetype,
             size: file.size,
             version: 1,
+            hash,
             uploaded_by: actor.id,
           })),
           { transaction }
@@ -170,7 +194,13 @@ async function apply(actor, data, files = []) {
     'application.submit',
     created,
     `Application ${created.reference_no} submitted for Type ${created.preferred_quarter_type} at ${created.station}`,
-    { reference_no: created.reference_no, quarter_type: created.preferred_quarter_type, station: created.station, documents: files.length }
+    {
+      reference_no: created.reference_no,
+      quarter_type: created.preferred_quarter_type,
+      station: created.station,
+      documents: unique.length,
+      duplicate_files_skipped: duplicates,
+    }
   );
   await notificationService.notify(
     actor,
@@ -185,7 +215,9 @@ async function apply(actor, data, files = []) {
     'New application'
   );
 
-  return get(created.id, actor);
+  const result = await get(created.id, actor);
+  result.duplicate_files = duplicates; // same content dobara upload hua to skip kiya (naam yahan)
+  return result;
 }
 
 // ---------- clerk: verify ----------

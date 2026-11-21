@@ -420,4 +420,4 @@ async function logAct(actor, step, { request, clearance, outcome, nextStep, reti
   );
 }
 
-module.exports = { initiate, act, complete, list, get };
+module.exports = { initiate, act, complete, list, get, stepsFor };

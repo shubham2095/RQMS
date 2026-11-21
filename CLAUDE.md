@@ -140,7 +140,7 @@ Har screen/route sahi role/permission se guard karo. Employee ko sirf apna kaam 
 - Waiting list: queue = (quarter_type, station); order **registration date** `waiting_since ASC, quarter_application_id ASC`; `waitingListService.place/reRank/remove/queue`. Remove = `is_active=false, rank=NULL` (history rehti hai).
 - Offer (`allotment.approve`): quarter ki queue ka rank-1 entry; **application `approved` na ho to offer refuse (400)** — koi skip nahi hota. Sab `sequelize.transaction` + row locks (quarter, queue). Offer par: quarter `allotted`, application `allotted`, entry hatao + re-rank, ALLOTMENT_ORDER certificate. Employee accept/reject (`respond`): reject par quarter `vacant` + application `rejected` (naya apply kar sakta hai). Possession (`allotment.possession`, sirf accepted par): quarter `occupied` + occupant, occupancy row, `has_active_allotment=true`, POSSESSION_LETTER + OCCUPANCY_CERTIFICATE.
 - Numbers: application `QA-YYYYMMDD-NNNN`, allotment order `AO-YYYYMMDD-NNNN` (daily sequence, `utils/referenceNumber.js`), certificate `ALO|POL|OCC-YYYYMMDD-XXXXXX`.
-- Files: uploads (`documents`, polymorphic) aur certificates (PDF via pdfkit) `config/storage.js` ki dirs mein (`UPLOADS_DIR` / `CERTIFICATES_DIR` env, default repo-root `uploads/` `certificates/`); DB mein relative filename. Download: `GET /api/documents/:id/download`, `GET /api/certificates/:id/download` (owner ya staff). Certificate generate flow ke AAKHIR mein, transaction ke andar.
+- Files: uploads (`documents`, polymorphic) aur certificates (PDF via pdfkit) `config/storage.js` ki dirs mein (`UPLOADS_DIR` / `CERTIFICATES_DIR` env, default repo-root `uploads/` `certificates/`); DB mein relative filename. Download: `GET /api/documents/:id/download`, `GET /api/certificates/:id/download` (owner ya staff — rules `config.fileAccess`, Phase 5b note dekho). Certificate generate flow ke AAKHIR mein, transaction ke andar.
 - Audit + notifications Phase 5a mein lag chuke hain (neeche "Phase 5a"). JSON columns ke liye `utils/jsonField.js` (MariaDB JSON ko text deta hai).
 - Demo data (dev only): `employee2/3/4@rqms.test` = EMP1002, EMP1003, EMP1004; Phase 3-R seeders 006/007 inhe grade pay + gazetted dete hain (EMP1001 GP4600→IV, 1002 GP4200→III, 1003 GP2400→II, 1004 GP7600 gazetted→V) aur Lucknow IV/V quarters + backdated waitlist EMP1005–1007 (Type III, 2025-02-03 / 2025-09-15 / 2026-03-01) add karte hain. Optional env `API_RATE_LIMIT` (default 300 req / 15 min).
 
@@ -162,6 +162,14 @@ Har screen/route sahi role/permission se guard karo. Employee ko sirf apna kaam 
 - `processDailyRetentionCycle(asOf?, actor?)`: non-cleared records dobara evaluate; alert sirf status TRANSITION par (expiring / overstaying mein ghusne par employee + estate officers), conditional update se do saath-saath cycles par bhi ek hi alert. Idempotent. `POST /api/retirements/run-cycle` (manual; `asOf` API se nahi). **Deploy par daily cron isi function ko call karega (Phase 6).** `GET /api/retirements?status=` (roles estate_officer | admin; super_admin bypass). Page `/retirements`.
 - Demo (dev only): seeder `008-demo-retirement.js` — EMP1006 retained, EMP1005 expiring, EMP1007 overstaying + sample notifications.
 - Timezone note: Sequelize timestamps UTC mein store hote hain (`created_at`); raw SQL/tests mein JS local Date se compare mat karo (id ya DB time use karo).
+
+**Phase 5b — Documents/Certificates management + Dashboard/Reports (done):**
+- **Hash:** `documents.hash` = sha256 (`utils/fileHash.js`), upload par compute (`applicationService.apply`). Ek hi submission mein same content dobara aaye to skip + disk se hata (dedupe, application fail nahi; response `duplicate_files`, audit `duplicate_files_skipped`). Alag employees ka same content allowed. Migration `022` = `documents.hash` index + purani rows ka backfill (file na mile to skip).
+- **Access ek jagah:** `config.fileAccess` (documents: `application.verify|decide|users.manage`; certificates: Allotment -> `allotment.approve|possession|users.manage`, VacationRequest -> koi `vacation.*` ya `users.manage`) + owner (employee apna). `services/fileAccess.js` (`documentScope/certificateScope` lists ke liye, `canSeeDocument/canSeeCertificate` download + metadata ke liye) — lists aur downloads kabhi alag nahi padte. **Admin (`users.manage`) ab documents/certificates list + download kar sakta hai** (pehle 404). Haq nahi to 404.
+- `GET /api/documents`, `GET /api/documents/:id`, `GET /api/certificates`, `GET /api/certificates/:id` (har logged-in user; service scope karti hai): filters (documents: `documentable_type, category, uploaded_by, from, to, q`; certificates: `type, certifiable_type, from, to, q`), `page`/`page_size` (max 100), newest first, `{ items, page, page_size, total }`. List mein server path / `payload` nahi; metadata mein `same_hash_count` (sirf wo documents jo actor ko dikhte hain). Pages `/documents`, `/certificates` (sab users), `components/Pager.jsx`.
+- **Reports** (`reports.view`): `GET /api/reports/summary` (8 grouped queries, data kitna bhi ho; sab status keys zero-filled): quarters (total, by type/status/station, type x status matrix), applications, waiting list per (type, station) + oldest registration, allotments (active/possession), vacations (+ in-clearance by step), retirements (+ open penalty total). Drill-downs `GET /api/reports/vacant-quarters?type=&station=`, `GET /api/reports/overstaying` (max 200 rows, true `total`). **`TODO(reservation)`: reserved-quota metrics abhi report nahi hote.**
+- `GET /api/reports/work-queue` (har logged-in user): sirf unki permissions ke counts (`applications_to_verify/check` = `application.verify`, `applications_to_decide` = `application.decide`, `offers_awaiting_possession` = `allotment.possession`, `vacations_at_my_step` = koi `vacation.*`); employee/admin ko `{}`.
+- Frontend: Dashboard = `reports.view` wale ko summary cards, baaki staff ko work-queue cards, employee ko simple welcome. `/reports` = cards + tables + drill-downs.
 
 ---
 
@@ -236,7 +244,7 @@ Key points:
 
 auth · profile(+family) · applications(verify/run-engine/decide) · waiting-list ·
 quarters(master CRUD) · allotments(offer/respond/possession) · vacations(+act=clearance) ·
-retirements(+run-cycle) · certificates(download) · notifications · reports · audit · admin/users
+retirements(+run-cycle) · documents(list/meta/download) · certificates(list/meta/download) · notifications · reports(summary/work-queue/drill-downs) · audit · admin/users
 
 ---
 
@@ -244,7 +252,7 @@ retirements(+run-cycle) · certificates(download) · notifications · reports ·
 
 Phase 0 setup → 1 auth+RBAC → 2 master data → 3 allotment flow → 4 vacation flow →
 **3-R engine realign (§11) — DONE** → 5 retirement + cross-cutting (audit/documents/certificates/dashboard) → 6 deploy.
-Phases 0–4 + 3-R + **5a (retirement, audit, notifications) DONE**. Baaki: **5b** (documents module, dashboard) → 6 deploy (daily retention cron). Detail `RQMS_BUILD_PLAN.md` mein.
+Phases 0–4 + 3-R + 5a (retirement, audit, notifications) + **5b (documents/certificates management, dashboard/reports) DONE**. Baaki: 6 deploy (daily retention cron). Pending client: reservation + advanced allotment concepts (section 11). Detail `RQMS_BUILD_PLAN.md` mein.
 
 ---
 

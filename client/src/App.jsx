@@ -21,6 +21,9 @@ import VacationDetail from './pages/VacationDetail';
 import Retirements from './pages/Retirements';
 import AuditLog from './pages/AuditLog';
 import Notifications from './pages/Notifications';
+import Documents from './pages/Documents';
+import Certificates from './pages/Certificates';
+import Reports from './pages/Reports';
 import { navItems } from './utils/navItems';
 
 // Dashboard alag route hai. Jin nav items ka real page ban gaya wo yahan map hai;
@@ -40,6 +43,9 @@ const realPages = {
   '/retirements': Retirements,
   '/admin/audit': AuditLog,
   '/notifications': Notifications,
+  '/documents': Documents,
+  '/certificates': Certificates,
+  '/reports': Reports,
 };
 const guardedItems = navItems.filter((item) => item.to !== '/dashboard');
 

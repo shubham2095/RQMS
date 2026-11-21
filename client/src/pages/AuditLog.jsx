@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import FormField from '../components/FormField';
+import Pager from '../components/Pager';
 import { listUsers } from '../services/adminService';
 import { listAuditLogs } from '../services/auditService';
 import { AUDIT_ACTIONS } from '../utils/constants';
@@ -59,8 +60,6 @@ function AuditLog() {
     setFilters(emptyFilters);
     setPage(1);
   }
-
-  const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
 
   return (
     <div>
@@ -146,17 +145,7 @@ function AuditLog() {
             </tbody>
           </table>
 
-          <div className="pager">
-            <button type="button" className="btn btn-secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              Previous
-            </button>
-            <span className="muted">
-              Page {page} of {totalPages} ({result.total} entries)
-            </span>
-            <button type="button" className="btn btn-secondary" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-              Next
-            </button>
-          </div>
+          <Pager page={page} pageSize={PAGE_SIZE} total={result.total} onChange={setPage} />
         </>
       )}
     </div>
