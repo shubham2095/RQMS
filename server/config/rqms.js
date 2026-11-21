@@ -48,7 +48,35 @@ const retention = {
   periodDays: 120,
   penaltyPerDay: 250, // INR
   alertBeforeDays: 15,
+  // notice: retire hone wale hain (date aage) · retained: retention chal raha · expiring: expiry ke alert window mein
+  // overstaying: expiry nikal gayi · cleared: quarter khali ho gaya
+  statuses: ['notice', 'retained', 'expiring', 'overstaying', 'cleared'],
 };
+
+// Audit log ke known actions (filter dropdown ke liye; DB mein koi bhi string save ho sakti hai).
+const auditActions = [
+  'login',
+  'login_failed',
+  'application.submit',
+  'application.verify',
+  'application.run_engine',
+  'application.approve',
+  'application.reject',
+  'allotment.offer',
+  'allotment.accept',
+  'allotment.decline',
+  'allotment.possession',
+  'vacation.initiate',
+  'vacation.approve_step',
+  'vacation.reject_step',
+  'vacation.complete',
+  'quarter.create',
+  'quarter.update',
+  'user.create',
+  'user.update',
+  'retirement.record',
+  'retirement.run_cycle',
+];
 
 // Order matters: ek ke baad agla step.
 const vacationClearanceSteps = [
@@ -90,6 +118,7 @@ const enums = {
   // 'cleared' enum mein hai par kabhi save nahi hota (last approval par complete() usi transaction mein chalta hai)
   vacationStatuses: ['submitted', 'in_clearance', 'cleared', 'completed', 'rejected'],
   clearanceStatuses: ['pending', 'approved', 'rejected'],
+  retirementStatuses: retention.statuses,
 };
 
 // Allotment "live" hai (offer se possession tak) — 'allotted' application tab tak open maani jati hai.
@@ -157,6 +186,7 @@ module.exports = {
   entitlement,
   reservation,
   retention,
+  auditActions,
   vacationClearanceSteps,
   vacationStepPermissions,
   vacationStepTitles,

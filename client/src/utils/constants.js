@@ -46,6 +46,33 @@ export const VACATION_TRIGGERS = [
   { value: 'death', label: 'Death' },
   { value: 'voluntary', label: 'Voluntary' },
 ];
+export const RETIREMENT_STATUSES = ['notice', 'retained', 'expiring', 'overstaying', 'cleared'];
+
+// Server config/rqms.js `auditActions` ke mirror (audit filter dropdown)
+export const AUDIT_ACTIONS = [
+  'login',
+  'login_failed',
+  'application.submit',
+  'application.verify',
+  'application.run_engine',
+  'application.approve',
+  'application.reject',
+  'allotment.offer',
+  'allotment.accept',
+  'allotment.decline',
+  'allotment.possession',
+  'vacation.initiate',
+  'vacation.approve_step',
+  'vacation.reject_step',
+  'vacation.complete',
+  'quarter.create',
+  'quarter.update',
+  'user.create',
+  'user.update',
+  'retirement.record',
+  'retirement.run_cycle',
+];
+
 export const VACATION_STATUSES = ['in_clearance', 'completed', 'rejected'];
 export const CLEARANCE_STEPS = ['clerk_inspection', 'electrical', 'water', 'accounts', 'estate_officer'];
 export const CLEARANCE_STEP_LABELS = {

@@ -1,4 +1,5 @@
 const { Quarter, EmployeeProfile } = require('../models');
+const auditService = require('./auditService');
 const { manualQuarterStatuses } = require('../config/rqms');
 const httpError = require('../utils/httpError');
 const { isUniqueError } = require('../utils/dbErrors');
@@ -31,20 +32,34 @@ async function getQuarter(id) {
   return quarter;
 }
 
-async function createQuarter(data) {
+async function createQuarter(actor, data) {
+  let quarter;
   try {
-    const quarter = await Quarter.create(data);
-    return getQuarter(quarter.id);
+    quarter = await Quarter.create(data);
   } catch (err) {
     if (isUniqueError(err)) {
       throw httpError(409, 'A quarter with this number already exists in this colony and station');
     }
     throw err;
   }
+
+  await auditService.log(
+    actor,
+    'quarter.create',
+    quarter,
+    `Quarter ${quarter.quarter_number} (Type ${quarter.quarter_type}, ${quarter.station}) created`,
+    { quarter_number: quarter.quarter_number, quarter_type: quarter.quarter_type, station: quarter.station }
+  );
+  return getQuarter(quarter.id);
 }
 
-async function updateQuarter(id, data) {
+async function updateQuarter(actor, id, data) {
   const quarter = await getQuarter(id);
+  // Sirf wahi fields jo sach mein badle (audit mein field NAAM + naya value)
+  const changed = {};
+  Object.keys(data).forEach((key) => {
+    if (String(quarter[key] ?? '') !== String(data[key] ?? '')) changed[key] = data[key];
+  });
 
   // allotted / occupied / vacation_pending / retired_occupancy ko allotment-vacation flow chalata hai.
   if (data.status && data.status !== quarter.status && !manualQuarterStatuses.includes(quarter.status)) {
@@ -59,6 +74,11 @@ async function updateQuarter(id, data) {
     }
     throw err;
   }
+
+  await auditService.log(actor, 'quarter.update', quarter, `Quarter ${quarter.quarter_number} updated`, {
+    changed: Object.keys(changed),
+    values: changed,
+  });
   return getQuarter(id);
 }
 

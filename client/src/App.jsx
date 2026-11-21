@@ -18,6 +18,9 @@ import WaitingList from './pages/WaitingList';
 import VacationRequest from './pages/VacationRequest';
 import VacationClearances from './pages/VacationClearances';
 import VacationDetail from './pages/VacationDetail';
+import Retirements from './pages/Retirements';
+import AuditLog from './pages/AuditLog';
+import Notifications from './pages/Notifications';
 import { navItems } from './utils/navItems';
 
 // Dashboard alag route hai. Jin nav items ka real page ban gaya wo yahan map hai;
@@ -34,6 +37,9 @@ const realPages = {
   '/waiting-list': WaitingList,
   '/vacations/new': VacationRequest,
   '/vacations': VacationClearances,
+  '/retirements': Retirements,
+  '/admin/audit': AuditLog,
+  '/notifications': Notifications,
 };
 const guardedItems = navItems.filter((item) => item.to !== '/dashboard');
 

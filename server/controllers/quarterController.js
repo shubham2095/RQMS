@@ -30,7 +30,7 @@ async function getQuarter(req, res, next) {
 async function createQuarter(req, res, next) {
   try {
     const data = parse(createQuarterSchema, req.body);
-    const quarter = await quarterService.createQuarter(data);
+    const quarter = await quarterService.createQuarter(req.user, data);
     res.status(201).json({ quarter });
   } catch (err) {
     next(err);
@@ -41,7 +41,7 @@ async function updateQuarter(req, res, next) {
   try {
     const { id } = parse(idParamSchema, req.params);
     const data = parse(updateQuarterSchema, req.body);
-    const quarter = await quarterService.updateQuarter(id, data);
+    const quarter = await quarterService.updateQuarter(req.user, id, data);
     res.json({ quarter });
   } catch (err) {
     next(err);

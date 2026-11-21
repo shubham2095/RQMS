@@ -5,6 +5,7 @@
 
 export const navItems = [
   { label: 'Dashboard', to: '/dashboard' },
+  { label: 'Notifications', to: '/notifications' }, // sab logged-in users (apni)
 
   // Employee
   { label: 'My Profile', to: '/profile', roles: ['employee'] },
@@ -30,10 +31,12 @@ export const navItems = [
       'vacation.estate_officer',
     ],
   },
+  { label: 'Retirements', to: '/retirements', roles: ['estate_officer', 'admin'] },
   { label: 'Reports', to: '/reports', permissions: ['reports.view'] },
 
   // Admin
   { label: 'Users', to: '/admin/users', permissions: ['users.manage'] },
+  { label: 'Audit Log', to: '/admin/audit', roles: ['admin'] },
   { label: 'Master Data', to: '/admin/master', permissions: ['master.manage'] },
   { label: 'Settings', to: '/admin/settings', permissions: ['settings.manage'] },
 ];

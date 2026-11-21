@@ -1,18 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 const { enums, vacationClearanceSteps } = require('../config/rqms');
-
-// DECIMAL mysql2 se string aata hai ("12.50") — API mein number dikhao.
-function decimalField(name) {
-  return {
-    type: DataTypes.DECIMAL(12, 2),
-    allowNull: true,
-    get() {
-      const value = this.getDataValue(name);
-      return value === null || value === undefined ? null : Number(value);
-    },
-  };
-}
+const decimalField = require('../utils/decimalField');
 
 const VacationClearance = sequelize.define(
   'VacationClearance',

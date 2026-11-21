@@ -12,6 +12,9 @@ const {
   User,
 } = require('../models');
 const certificateService = require('./certificateService');
+const retirementService = require('./retirementService');
+const auditService = require('./auditService');
+const notificationService = require('./notificationService');
 const { hasAnyPermission } = require('./userAccessService');
 const {
   vacationClearanceSteps,
@@ -121,7 +124,7 @@ async function initiate(actor, data) {
   const profile = await findOwnProfile(actor);
   if (!profile) throw httpError(400, 'You do not have an active allotment');
 
-  const requestId = await retryOnUnique(() =>
+  const initiated = await retryOnUnique(() =>
     sequelize.transaction(async (transaction) => {
       // Allotment row lock: ek saath do request aayein to serialize ho jayein
       const allotment = await Allotment.findOne({
@@ -173,13 +176,43 @@ async function initiate(actor, data) {
       );
       await quarter.update({ status: 'vacation_pending' }, { transaction });
 
-      // TODO(Phase 5): trigger 'retirement' par retirement record + retention period yahin banega
-      // TODO(Phase 5): audit log + notify clerk
-      return request.id;
+      // trigger 'retirement' par retirement record (retention window) — usi transaction mein, duplicate nahi banta.
+      let retirement = null;
+      if (data.trigger === 'retirement') {
+        const full = await EmployeeProfile.findByPk(profile.id, { attributes: ['id', 'retirement_date'], transaction });
+        retirement = await retirementService.recordRetirement(full, allotment, {
+          retirementDate: full.retirement_date || data.requested_vacation_date,
+          transaction,
+        });
+      }
+      return { request, retirement };
     })
   );
 
-  return get(requestId, actor);
+  // Commit ke baad: audit + notifications
+  const { request, retirement } = initiated;
+  await auditService.log(actor, 'vacation.initiate', request, `Vacation request ${request.reference_no} started (${request.trigger})`, {
+    reference_no: request.reference_no,
+    trigger: request.trigger,
+    requested_vacation_date: request.requested_vacation_date,
+  });
+  if (retirement && retirement.created) {
+    await auditService.log(
+      actor,
+      'retirement.record',
+      retirement.record,
+      `Retirement record created: retention until ${formatDate(retirement.record.retention_expiry_date)}`,
+      { retirement_date: retirement.record.retirement_date, retention_expiry_date: retirement.record.retention_expiry_date }
+    );
+  }
+  await notificationService.notifyPermission(
+    vacationStepPermissions[FIRST_STEP],
+    'vacation.initiated',
+    `${actor.name} started vacation request ${request.reference_no}. It is waiting for your inspection.`,
+    'New vacation request'
+  );
+
+  return get(request.id, actor);
 }
 
 // ---------- act ----------
@@ -239,7 +272,8 @@ async function complete(request, actor, transaction) {
     { where: { allotment_id: allotment.id, is_current: true }, transaction }
   );
 
-  // TODO(Phase 5): audit log + notify employee
+  // Retirement wala record ho to 'cleared': overstay/penalty handover date tak freeze
+  const clearedRetirement = await retirementService.markCleared(allotment.id, now, transaction);
 
   const clearances = await VacationClearance.findAll({
     where: { vacation_request_id: request.id },
@@ -259,11 +293,12 @@ async function complete(request, actor, transaction) {
   await certificateService.generate(request, 'VACATION_NOC', payload, actor.id, transaction);
   await certificateService.generate(request, 'NO_DUE_CERTIFICATE', payload, actor.id, transaction);
   await certificateService.generate(request, 'HANDOVER_CERTIFICATE', payload, actor.id, transaction);
+  return { retirement: clearedRetirement };
 }
 
 // Current step par approve / reject. step = jis step par client act kar raha hai (stale click pakadne ke liye).
 async function act(requestId, actor, step, body) {
-  await sequelize.transaction(async (transaction) => {
+  const result = await sequelize.transaction(async (transaction) => {
     const request = await VacationRequest.findByPk(requestId, lock(transaction));
     if (!request) throw httpError(404, 'Vacation request not found');
     if (request.status !== 'in_clearance') {
@@ -304,8 +339,7 @@ async function act(requestId, actor, step, body) {
       await request.update({ status: 'rejected', current_step: null }, { transaction });
       const quarter = await Quarter.findByPk(request.quarter_id, lock(transaction));
       await quarter.update({ status: 'occupied' }, { transaction });
-      // TODO(Phase 5): audit log + notify employee
-      return;
+      return { request, clearance, outcome: 'rejected' };
     }
 
     // Step certificate (electrical / water)
@@ -335,13 +369,55 @@ async function act(requestId, actor, step, body) {
     });
     if (next) {
       await request.update({ current_step: next.step }, { transaction });
-      // TODO(Phase 5): audit log + notify next department
-    } else {
-      await complete(request, actor, transaction);
+      return { request, clearance, outcome: 'advanced', nextStep: next.step };
     }
+
+    const { retirement } = await complete(request, actor, transaction);
+    return { request, clearance, outcome: 'completed', retirement };
   });
 
+  await logAct(actor, step, result);
   return get(requestId, actor);
+}
+
+// Commit ke baad: audit + notifications (act ke teen anjaam: rejected / advanced / completed)
+async function logAct(actor, step, { request, clearance, outcome, nextStep, retirement }) {
+  const title = vacationStepTitles[step];
+  const base = { reference_no: request.reference_no, step, remarks: clearance.remarks };
+
+  if (outcome === 'rejected') {
+    await auditService.log(actor, 'vacation.reject_step', request, `${title} rejected on ${request.reference_no}`, base);
+    await notificationService.notifyProfile(
+      request.employee_profile_id,
+      'vacation.rejected',
+      `Your vacation request ${request.reference_no} was rejected at "${title}"${clearance.remarks ? `: ${clearance.remarks}` : '.'} You can submit a new request.`,
+      'Vacation request rejected'
+    );
+    return;
+  }
+
+  await auditService.log(actor, 'vacation.approve_step', request, `${title} approved on ${request.reference_no}`, base);
+
+  if (outcome === 'advanced') {
+    await notificationService.notifyPermission(
+      vacationStepPermissions[nextStep],
+      'vacation.step_ready',
+      `Vacation request ${request.reference_no} is waiting for "${vacationStepTitles[nextStep]}".`,
+      'Clearance pending'
+    );
+    return;
+  }
+
+  await auditService.log(actor, 'vacation.complete', request, `Vacation ${request.reference_no} completed; quarter is vacant`, {
+    reference_no: request.reference_no,
+    retirement_cleared: Boolean(retirement),
+  });
+  await notificationService.notifyProfile(
+    request.employee_profile_id,
+    'vacation.completed',
+    `Your vacation request ${request.reference_no} is complete. Your NOC, No-Due and Handover certificates are available.`,
+    'Vacation completed'
+  );
 }
 
 module.exports = { initiate, act, complete, list, get };

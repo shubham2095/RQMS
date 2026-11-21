@@ -141,7 +141,7 @@ Har screen/route sahi role/permission se guard karo. Employee ko sirf apna kaam 
 - Offer (`allotment.approve`): quarter ki queue ka rank-1 entry; **application `approved` na ho to offer refuse (400)** — koi skip nahi hota. Sab `sequelize.transaction` + row locks (quarter, queue). Offer par: quarter `allotted`, application `allotted`, entry hatao + re-rank, ALLOTMENT_ORDER certificate. Employee accept/reject (`respond`): reject par quarter `vacant` + application `rejected` (naya apply kar sakta hai). Possession (`allotment.possession`, sirf accepted par): quarter `occupied` + occupant, occupancy row, `has_active_allotment=true`, POSSESSION_LETTER + OCCUPANCY_CERTIFICATE.
 - Numbers: application `QA-YYYYMMDD-NNNN`, allotment order `AO-YYYYMMDD-NNNN` (daily sequence, `utils/referenceNumber.js`), certificate `ALO|POL|OCC-YYYYMMDD-XXXXXX`.
 - Files: uploads (`documents`, polymorphic) aur certificates (PDF via pdfkit) `config/storage.js` ki dirs mein (`UPLOADS_DIR` / `CERTIFICATES_DIR` env, default repo-root `uploads/` `certificates/`); DB mein relative filename. Download: `GET /api/documents/:id/download`, `GET /api/certificates/:id/download` (owner ya staff). Certificate generate flow ke AAKHIR mein, transaction ke andar.
-- `TODO(Phase 5)` comments services mein: audit log + notification yahin lagenge. JSON columns ke liye `utils/jsonField.js` (MariaDB JSON ko text deta hai).
+- Audit + notifications Phase 5a mein lag chuke hain (neeche "Phase 5a"). JSON columns ke liye `utils/jsonField.js` (MariaDB JSON ko text deta hai).
 - Demo data (dev only): `employee2/3/4@rqms.test` = EMP1002, EMP1003, EMP1004; Phase 3-R seeders 006/007 inhe grade pay + gazetted dete hain (EMP1001 GP4600→IV, 1002 GP4200→III, 1003 GP2400→II, 1004 GP7600 gazetted→V) aur Lucknow IV/V quarters + backdated waitlist EMP1005–1007 (Type III, 2025-02-03 / 2025-09-15 / 2026-03-01) add karte hain. Optional env `API_RATE_LIMIT` (default 300 req / 15 min).
 
 **Vacation flow (Phase 4 — done):**
@@ -151,7 +151,17 @@ Har screen/route sahi role/permission se guard karo. Employee ko sirf apna kaam 
 - Approve: electrical -> ELECTRICAL_CLEARANCE, water -> WATER_CLEARANCE certificate; last step approve hote hi `complete()` usi transaction mein: request `completed`, allotment `vacated` (+ `vacated_on` = aaj), quarter `vacant` + occupant null, profile `has_active_allotment=false`, occupancy band (`end_date` = aaj), VACATION_NOC + NO_DUE_CERTIFICATE + HANDOVER_CERTIFICATE (payload mein har step ka recorded data).
 - Reject kisi bhi step par: request `rejected` (terminal), baaki steps pending, quarter wapas `occupied`, allotment/profile flag same; employee nayi request file kar sakta hai. Status `cleared` enum mein hai par kabhi save nahi hota.
 - Listing: employee = apni; staff (koi bhi `vacation.*`) = sab, `waiting_for_me=true` = jo abhi mere step par hain; detail mein `can_act`. Certificates download `GET /api/certificates/:id/download` (owner ya vacation staff).
-- Frontend: `VacationRequest` (employee), `VacationClearances` (staff list), `VacationDetail` (timeline + step form), `components/VacationTimeline.jsx`. `TODO(Phase 5)` markers: audit + notifications + retirement record.
+- Frontend: `VacationRequest` (employee), `VacationClearances` (staff list), `VacationDetail` (timeline + step form), `components/VacationTimeline.jsx`. (Audit, notifications aur retirement record Phase 5a mein wired.)
+
+**Phase 5a — Retirement + Audit + Notifications (done):**
+- **Audit** (`auditService.log(user, action, auditable, description, properties, req?)`): har important action ke baad ek `audit_logs` row. **Hamesha transaction COMMIT ke BAAD** call karo (rollback hui action ka audit nahi), aur kabhi throw nahi karta (fail ho to console.error, main action chalti rahe). `properties` se `password|token|secret` keys auto hat jaati hain; user update mein sirf changed field NAAM. ip + user-agent `middleware/requestContext.js` (AsyncLocalStorage, `server.js` mein body parsers ke baad) se aate hain — services ko `req` nahi chahiye. Known actions: `config.auditActions` (client `AUDIT_ACTIONS` mirror). `login_failed` mein identifier + reason (password kabhi nahi).
+- `GET /api/audit` (role admin; super_admin bypass): filters `action`, `user_id`, `from`, `to` (dono din shamil), `page`, `page_size` (max 100); newest first; `{ logs, page, page_size, total }`. Page `/admin/audit`.
+- **Notifications** (`notificationService.notify(user|id, event, message, title?, channels=['system'])`): `notification_logs` row; sirf 'system' channel (email/sms/whatsapp = TODO, skip). Fan-out: `notifyPermission(slug, …)`, `notifyRole(slug, …)`, `notifyProfile(profileId, …)` (active users; super_admin ko nahi). Audit jaisa: commit ke baad, kabhi throw nahi. Events: application submitted/approved/rejected, offer made (`allotment.offered`), accepted/declined, possession, vacation initiated / next-step ready / rejected / completed, `retirement.expiring` / `retirement.overstaying`.
+- `GET /api/notifications` (sirf apni; `unread_only`, `limit`; `unread_count`), `POST /api/notifications/:id/read` (dusre ki id → 404), `POST /api/notifications/read-all`. Read = `status` `logged` → `read`. Page `/notifications` (sab users).
+- **Retirement** (`retirementService`): `retirement_records`. Vacation `trigger='retirement'` par `recordRetirement` (usi transaction mein; retirement date = profile.retirement_date, warna requested vacation date; retention automatic grant, expiry = date + `retention.periodDays` 120). Ek profile+allotment par ek hi non-cleared record (reject ke baad dobara request par duplicate nahi). `evaluate(record, asOf)` PURE: aaj < retirement → `notice`; aaj > expiry → `overstaying` (din × ₹250); expiry − aaj ≤ 15 → `expiring`; warna `retained`. Vacation complete par `markCleared` (overstay/penalty handover date par freeze). Quarter ka `retired_occupancy` status abhi use nahi.
+- `processDailyRetentionCycle(asOf?, actor?)`: non-cleared records dobara evaluate; alert sirf status TRANSITION par (expiring / overstaying mein ghusne par employee + estate officers), conditional update se do saath-saath cycles par bhi ek hi alert. Idempotent. `POST /api/retirements/run-cycle` (manual; `asOf` API se nahi). **Deploy par daily cron isi function ko call karega (Phase 6).** `GET /api/retirements?status=` (roles estate_officer | admin; super_admin bypass). Page `/retirements`.
+- Demo (dev only): seeder `008-demo-retirement.js` — EMP1006 retained, EMP1005 expiring, EMP1007 overstaying + sample notifications.
+- Timezone note: Sequelize timestamps UTC mein store hote hain (`created_at`); raw SQL/tests mein JS local Date se compare mat karo (id ya DB time use karo).
 
 ---
 
@@ -196,8 +206,8 @@ VacationTrigger = transfer/retirement/resignation/death/voluntary
 ### Reservation (SC/ST quota) — **PENDING, implement nahi**
 - `config.reservation` sirf placeholder (`enabled:false`; I–II 10%, III–IV 5%, 50-quarter threshold). Code mein `TODO(reservation)` markers (`waitingListService`, `applicationService`). Client se confirm baaki: OBC, essential/non-essential determination, 50-quarter threshold.
 
-### Retirement
-- Retention 120 days · overstay ₹250/day · alert 15 days pehle · daily cycle (expiring→alert, expired→overstaying+penalty).
+### Retirement (Phase 5a — implemented, `config.retention`)
+- Retention 120 days · overstay ₹250/day · alert 15 days pehle · daily cycle (expiring→alert, expired→overstaying+penalty). Detail: Phase 5a note (section 5).
 
 ### Allotment (transaction)
 - Vacant quarter → rank-1 → offer → order no auto → quarter/application `allotted` → accept → possession → occupancy + `occupied` + certificates. Reject → `vacant`.
@@ -234,7 +244,7 @@ retirements(+run-cycle) · certificates(download) · notifications · reports ·
 
 Phase 0 setup → 1 auth+RBAC → 2 master data → 3 allotment flow → 4 vacation flow →
 **3-R engine realign (§11) — DONE** → 5 retirement + cross-cutting (audit/documents/certificates/dashboard) → 6 deploy.
-Phases 0–4 + 3-R DONE. Detail `RQMS_BUILD_PLAN.md` mein.
+Phases 0–4 + 3-R + **5a (retirement, audit, notifications) DONE**. Baaki: **5b** (documents module, dashboard) → 6 deploy (daily retention cron). Detail `RQMS_BUILD_PLAN.md` mein.
 
 ---
 

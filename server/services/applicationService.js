@@ -12,6 +12,8 @@ const {
 const eligibilityService = require('./eligibilityService');
 const { getEntitlement } = require('./entitlementService');
 const waitingListService = require('./waitingListService');
+const auditService = require('./auditService');
+const notificationService = require('./notificationService');
 const { hasAnyPermission } = require('./userAccessService');
 const { openApplicationStatuses, liveAllotmentStatuses } = require('../config/rqms');
 const httpError = require('../utils/httpError');
@@ -101,7 +103,7 @@ async function apply(actor, data, files = []) {
   const profile = await findOwnProfile(actor);
   if (!profile) throw httpError(400, 'Save your profile before applying for a quarter');
 
-  const applicationId = await retryOnUnique(() =>
+  const created = await retryOnUnique(() =>
     sequelize.transaction(async (transaction) => {
       // Profile row lock: ek hi employee ke do saath-saath apply serialize ho jayein
       await EmployeeProfile.findByPk(profile.id, lock(transaction));
@@ -158,26 +160,50 @@ async function apply(actor, data, files = []) {
         );
       }
 
-      // TODO(Phase 5): audit log + notify clerks
-      return application.id;
+      return application;
     })
   );
 
-  return get(applicationId, actor);
+  // Commit ke baad: audit + notifications (fail hone par bhi main action nahi rukta)
+  await auditService.log(
+    actor,
+    'application.submit',
+    created,
+    `Application ${created.reference_no} submitted for Type ${created.preferred_quarter_type} at ${created.station}`,
+    { reference_no: created.reference_no, quarter_type: created.preferred_quarter_type, station: created.station, documents: files.length }
+  );
+  await notificationService.notify(
+    actor,
+    'application.submitted',
+    `Your application ${created.reference_no} has been received. The quarter clerk will verify it.`,
+    'Application submitted'
+  );
+  await notificationService.notifyPermission(
+    'application.verify',
+    'application.submitted',
+    `New application ${created.reference_no} from ${actor.name} is waiting for verification.`,
+    'New application'
+  );
+
+  return get(created.id, actor);
 }
 
 // ---------- clerk: verify ----------
 
 async function verify(id, actor) {
-  await sequelize.transaction(async (transaction) => {
-    const application = await QuarterApplication.findByPk(id, lock(transaction));
-    if (!application) throw httpError(404, 'Application not found');
-    if (application.status !== 'submitted') {
-      throw httpError(400, `Only a submitted application can be verified (this one is ${application.status})`);
+  const application = await sequelize.transaction(async (transaction) => {
+    const found = await QuarterApplication.findByPk(id, lock(transaction));
+    if (!found) throw httpError(404, 'Application not found');
+    if (found.status !== 'submitted') {
+      throw httpError(400, `Only a submitted application can be verified (this one is ${found.status})`);
     }
 
-    await application.update({ status: 'verified', verified_by: actor.id, verified_at: new Date() }, { transaction });
-    // TODO(Phase 5): audit log
+    await found.update({ status: 'verified', verified_by: actor.id, verified_at: new Date() }, { transaction });
+    return found;
+  });
+
+  await auditService.log(actor, 'application.verify', application, `Application ${application.reference_no} verified`, {
+    reference_no: application.reference_no,
   });
   return get(id, actor);
 }
@@ -189,7 +215,7 @@ const ENGINE_STATUSES = ['verified', 'ineligible', 'waitlisted'];
 // Sirf eligibility (grade pay -> quarter type + baaki checks). Eligible ho to waiting list mein
 // (rank = registration date order), warna ineligible. Koi points / score nahi.
 async function runEngine(id, actor) {
-  await sequelize.transaction(async (transaction) => {
+  const outcome = await sequelize.transaction(async (transaction) => {
     const application = await QuarterApplication.findByPk(id, lock(transaction));
     if (!application) throw httpError(404, 'Application not found');
     if (!ENGINE_STATUSES.includes(application.status)) {
@@ -216,8 +242,17 @@ async function runEngine(id, actor) {
     } else {
       await waitingListService.remove(application, transaction);
     }
-    // TODO(Phase 5): audit log
+    return { application, eligibilityResult };
   });
+
+  const { application, eligibilityResult } = outcome;
+  await auditService.log(
+    actor,
+    'application.run_engine',
+    application,
+    `Eligibility check for ${application.reference_no}: ${eligibilityResult.eligible ? 'eligible, waitlisted' : 'ineligible'}`,
+    { reference_no: application.reference_no, eligible: eligibilityResult.eligible, reasons: eligibilityResult.reasons }
+  );
   return get(id, actor);
 }
 
@@ -227,7 +262,7 @@ const REJECTABLE_STATUSES = ['submitted', 'verified', 'ineligible', 'waitlisted'
 
 // decision: 'approve' | 'reject'. Approve sirf waitlisted se; reject kisi bhi pre-allotment stage se.
 async function decide(id, actor, { decision, remarks }) {
-  await sequelize.transaction(async (transaction) => {
+  const application = await sequelize.transaction(async (transaction) => {
     const application = await QuarterApplication.findByPk(id, lock(transaction));
     if (!application) throw httpError(404, 'Application not found');
 
@@ -245,8 +280,25 @@ async function decide(id, actor, { decision, remarks }) {
       await application.update({ ...stamp, status: 'rejected' }, { transaction });
       await waitingListService.remove(application, transaction);
     }
-    // TODO(Phase 5): audit log + notify employee
+    return application;
   });
+
+  const approved = decision === 'approve';
+  await auditService.log(
+    actor,
+    approved ? 'application.approve' : 'application.reject',
+    application,
+    `Application ${application.reference_no} ${approved ? 'approved' : 'rejected'}`,
+    { reference_no: application.reference_no, remarks: remarks || null }
+  );
+  await notificationService.notifyProfile(
+    application.employee_profile_id,
+    approved ? 'application.approved' : 'application.rejected',
+    approved
+      ? `Your application ${application.reference_no} has been approved. You will be offered a quarter when one is available for your turn.`
+      : `Your application ${application.reference_no} was rejected${remarks ? `: ${remarks}` : '.'}`,
+    approved ? 'Application approved' : 'Application rejected'
+  );
   return get(id, actor);
 }
 

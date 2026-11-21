@@ -12,6 +12,8 @@ const {
 } = require('../models');
 const waitingListService = require('./waitingListService');
 const certificateService = require('./certificateService');
+const auditService = require('./auditService');
+const notificationService = require('./notificationService');
 const { hasAnyPermission } = require('./userAccessService');
 const httpError = require('../utils/httpError');
 const { nextDailyNumber, retryOnUnique } = require('../utils/referenceNumber');
@@ -132,7 +134,7 @@ function basePayload(allotment, quarter, profile) {
 
 // Vacant quarter ko queue ke rank-1 (approved) applicant ko offer karo. Sab ek transaction mein.
 async function offer(quarterId, approver) {
-  const allotmentId = await retryOnUnique(() =>
+  const offered = await retryOnUnique(() =>
     sequelize.transaction(async (transaction) => {
       const quarter = await Quarter.findByPk(quarterId, lock(transaction));
       if (!quarter) throw httpError(404, 'Quarter not found');
@@ -162,7 +164,6 @@ async function offer(quarterId, approver) {
       await application.update({ status: 'allotted' }, { transaction });
       await waitingListService.remove(application, transaction);
 
-      // TODO(Phase 5): audit log (offer) + notify employee
       const profile = await loadProfileWithName(application.employee_profile_id, transaction);
       await certificateService.generate(
         allotment,
@@ -176,11 +177,27 @@ async function offer(quarterId, approver) {
         approver.id,
         transaction
       );
-      return allotment.id;
+      return { allotment, quarter, application };
     })
   );
 
-  return get(allotmentId, approver);
+  // Commit ke baad: audit + notification
+  const { allotment, quarter, application } = offered;
+  await auditService.log(
+    approver,
+    'allotment.offer',
+    allotment,
+    `Quarter ${quarter.quarter_number} offered (order ${allotment.allotment_order_no}) for application ${application.reference_no}`,
+    { order_no: allotment.allotment_order_no, quarter_id: quarter.id, application_id: application.id }
+  );
+  await notificationService.notifyProfile(
+    allotment.employee_profile_id,
+    'allotment.offered',
+    `Quarter ${quarter.quarter_number} (Type ${quarter.quarter_type}, ${quarter.colony_name}) has been allotted to you. Order ${allotment.allotment_order_no}. Please accept or decline it under My Allotment.`,
+    'Quarter allotted'
+  );
+
+  return get(allotment.id, approver);
 }
 
 // ---------- respond ----------
@@ -189,7 +206,7 @@ async function offer(quarterId, approver) {
 async function respond(allotmentId, actor, { decision, remarks }) {
   const profile = await EmployeeProfile.findOne({ where: { user_id: actor.id }, attributes: ['id'] });
 
-  await sequelize.transaction(async (transaction) => {
+  const result = await sequelize.transaction(async (transaction) => {
     const allotment = profile
       ? await Allotment.findOne({ where: { id: allotmentId, employee_profile_id: profile.id }, ...lock(transaction) })
       : null;
@@ -199,8 +216,8 @@ async function respond(allotmentId, actor, { decision, remarks }) {
     const now = new Date();
     if (decision === 'accept') {
       await allotment.update({ status: 'accepted', responded_at: now, remarks: remarks || allotment.remarks }, { transaction });
-      // TODO(Phase 5): audit log + notify clerk
-      return;
+      const acceptedQuarter = await Quarter.findByPk(allotment.quarter_id, { transaction });
+      return { allotment, quarter: acceptedQuarter };
     }
 
     await allotment.update({ status: 'rejected', responded_at: now, remarks: remarks || allotment.remarks }, { transaction });
@@ -215,8 +232,35 @@ async function respond(allotmentId, actor, { decision, remarks }) {
         { transaction }
       );
     }
-    // TODO(Phase 5): audit log + notify estate officer
+    return { allotment, quarter };
   });
+
+  // Commit ke baad: audit + notification
+  const { allotment, quarter } = result;
+  if (decision === 'accept') {
+    await auditService.log(actor, 'allotment.accept', allotment, `Offer ${allotment.allotment_order_no} accepted`, {
+      order_no: allotment.allotment_order_no,
+      quarter_number: quarter.quarter_number,
+    });
+    await notificationService.notifyPermission(
+      'allotment.possession',
+      'allotment.accepted',
+      `${actor.name} accepted quarter ${quarter.quarter_number} (order ${allotment.allotment_order_no}). Please record possession.`,
+      'Offer accepted'
+    );
+  } else {
+    await auditService.log(actor, 'allotment.decline', allotment, `Offer ${allotment.allotment_order_no} declined`, {
+      order_no: allotment.allotment_order_no,
+      quarter_number: quarter.quarter_number,
+      remarks: remarks || null,
+    });
+    await notificationService.notifyRole(
+      'estate_officer',
+      'allotment.declined',
+      `${actor.name} declined quarter ${quarter.quarter_number} (order ${allotment.allotment_order_no}). The quarter is vacant again.`,
+      'Offer declined'
+    );
+  }
 
   return get(allotmentId, actor);
 }
@@ -225,7 +269,7 @@ async function respond(allotmentId, actor, { decision, remarks }) {
 
 // Clerk possession record karta hai: quarter occupied, occupancy start, profile flag, 2 certificates.
 async function takePossession(allotmentId, actor, possessionDate) {
-  await sequelize.transaction(async (transaction) => {
+  const recorded = await sequelize.transaction(async (transaction) => {
     const allotment = await Allotment.findByPk(allotmentId, lock(transaction));
     if (!allotment) throw httpError(404, 'Allotment not found');
     if (allotment.status === 'offered') throw httpError(400, 'The employee has not accepted this offer yet');
@@ -255,7 +299,6 @@ async function takePossession(allotmentId, actor, possessionDate) {
     );
     await profile.update({ has_active_allotment: true }, { transaction });
 
-    // TODO(Phase 5): audit log + notify employee
     const withName = await loadProfileWithName(profile.id, transaction);
     const payload = basePayload(allotment, quarter, withName);
     await certificateService.generate(
@@ -272,7 +315,24 @@ async function takePossession(allotmentId, actor, possessionDate) {
       actor.id,
       transaction
     );
+    return { allotment, quarter, date };
   });
+
+  // Commit ke baad: audit + notification
+  const { allotment, quarter, date } = recorded;
+  await auditService.log(
+    actor,
+    'allotment.possession',
+    allotment,
+    `Possession of quarter ${quarter.quarter_number} recorded (order ${allotment.allotment_order_no})`,
+    { order_no: allotment.allotment_order_no, quarter_id: quarter.id, possession_date: date }
+  );
+  await notificationService.notifyProfile(
+    allotment.employee_profile_id,
+    'allotment.possession',
+    `Possession of quarter ${quarter.quarter_number} is recorded from ${dayjs(date).format('DD MMM YYYY')}. Your possession letter and occupancy certificate are available.`,
+    'Possession recorded'
+  );
 
   return get(allotmentId, actor);
 }

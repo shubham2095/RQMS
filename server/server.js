@@ -17,6 +17,10 @@ const allotmentRoutes = require('./routes/allotments');
 const waitingListRoutes = require('./routes/waitingList');
 const fileRoutes = require('./routes/files');
 const vacationRoutes = require('./routes/vacations');
+const retirementRoutes = require('./routes/retirements');
+const auditRoutes = require('./routes/audit');
+const notificationRoutes = require('./routes/notifications');
+const { requestContext } = require('./middleware/requestContext');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,6 +35,7 @@ app.use(
 );
 app.use(express.json());
 app.use(cookieParser());
+app.use(requestContext); // ip + user-agent audit logs ke liye (body parsers ke baad)
 
 // General limiter; login par alag, sakht limiter (middleware/loginLimiter.js) bhi hai.
 app.use(
@@ -52,6 +57,9 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/allotments', allotmentRoutes);
 app.use('/api/waiting-list', waitingListRoutes);
 app.use('/api/vacations', vacationRoutes);
+app.use('/api/retirements', retirementRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api', fileRoutes);
 
 // Unknown API routes

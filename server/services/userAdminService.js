@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { sequelize, User, Role, EmployeeProfile } = require('../models');
 const { isSuperAdmin } = require('./userAccessService');
+const auditService = require('./auditService');
 const httpError = require('../utils/httpError');
 const { isUniqueError } = require('../utils/dbErrors');
 
@@ -62,15 +63,21 @@ async function createUser(actor, data) {
   const passwordHash = await bcrypt.hash(data.password, 10);
 
   try {
-    const userId = await sequelize.transaction(async (transaction) => {
+    const created = await sequelize.transaction(async (transaction) => {
       const user = await User.create(
         { name: data.name, email: data.email, password_hash: passwordHash, is_active: data.is_active },
         { transaction }
       );
       await user.setRoles(roles, { transaction });
-      return user.id;
+      return user;
     });
-    return toSummary(await findUserWithRoles(userId));
+
+    await auditService.log(actor, 'user.create', created, `User ${created.email} created`, {
+      email: created.email,
+      roles: data.role_slugs,
+      is_active: data.is_active,
+    });
+    return toSummary(await findUserWithRoles(created.id));
   } catch (err) {
     if (isUniqueError(err)) throw httpError(409, 'A user with this email already exists');
     throw err;
@@ -127,6 +134,13 @@ async function updateUser(actor, id, data) {
     if (isUniqueError(err)) throw httpError(409, 'A user with this email already exists');
     throw err;
   }
+
+  // Sirf field NAAM (password ka value kabhi nahi); role badle to naye role slugs bhi
+  const changedFields = Object.keys(data).filter((key) => data[key] !== undefined);
+  await auditService.log(actor, 'user.update', user, `User ${user.email} updated`, {
+    changed: changedFields,
+    roles: data.role_slugs,
+  });
   return toSummary(await findUserWithRoles(id));
 }
 

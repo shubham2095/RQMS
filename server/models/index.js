@@ -14,6 +14,9 @@ const Document = require('./Document');
 const Certificate = require('./Certificate');
 const VacationRequest = require('./VacationRequest');
 const VacationClearance = require('./VacationClearance');
+const RetirementRecord = require('./RetirementRecord');
+const AuditLog = require('./AuditLog');
+const NotificationLog = require('./NotificationLog');
 
 // User <-> Role  (role_user)
 User.belongsToMany(Role, {
@@ -117,6 +120,15 @@ VacationRequest.hasMany(Certificate, {
   scope: { certifiable_type: 'VacationRequest' },
 });
 
+// ---- Phase 5a: retirement, audit, notifications ----
+
+RetirementRecord.belongsTo(EmployeeProfile, { as: 'employee', foreignKey: 'employee_profile_id' });
+EmployeeProfile.hasMany(RetirementRecord, { as: 'retirement_records', foreignKey: 'employee_profile_id' });
+RetirementRecord.belongsTo(Allotment, { as: 'allotment', foreignKey: 'allotment_id' });
+
+AuditLog.belongsTo(User, { as: 'user', foreignKey: 'user_id' });
+NotificationLog.belongsTo(User, { as: 'user', foreignKey: 'user_id' });
+
 module.exports = {
   sequelize,
   User,
@@ -133,4 +145,7 @@ module.exports = {
   Certificate,
   VacationRequest,
   VacationClearance,
+  RetirementRecord,
+  AuditLog,
+  NotificationLog,
 };
