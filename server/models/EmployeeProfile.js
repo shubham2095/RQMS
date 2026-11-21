@@ -26,6 +26,8 @@ const EmployeeProfile = sequelize.define(
       validate: { isIn: [enums.serviceTypes] },
     },
     grade_pay: { type: DataTypes.INTEGER, allowNull: true },
+    // Gazetted officer? Quarter entitlement (grade pay -> type) isi par bhi depend karta hai
+    is_gazetted: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     pay_level: { type: DataTypes.STRING(30), allowNull: true },
     date_of_joining: { type: DataTypes.DATEONLY, allowNull: true },
     retirement_date: { type: DataTypes.DATEONLY, allowNull: true },

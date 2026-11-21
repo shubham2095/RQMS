@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const { enums } = require('../config/rqms');
 const { requiredText, optionalValue, optionalText, isoDate } = require('./helpers');
+// grade_pay + is_gazetted: admin bhi badal sakta hai (adminValidator) — wahi rules
 
 // PUT /api/profile — editable fields ka full set. has_active_allotment system-managed hai, yahan nahi.
 const profileSchema = z
@@ -19,9 +20,9 @@ const profileSchema = z
     railway_zone: optionalText('Railway zone', 100),
     category: z.enum(enums.categories, 'Select a valid category').default('GENERAL'),
     service_type: z.enum(enums.serviceTypes, 'Select a valid service type').default('non_essential'),
-    grade_pay: optionalValue(
-      z.number('Grade pay must be a number').int('Grade pay must be a whole number').min(0, 'Grade pay cannot be negative')
-    ),
+    // Grade pay ZAROORI hai: isi se quarter type ka hakk (entitlement) tay hota hai
+    grade_pay: z.number('Grade pay is required').int('Grade pay must be a whole number').min(1, 'Grade pay must be at least 1'),
+    is_gazetted: z.boolean('is_gazetted must be true or false').default(false),
     pay_level: optionalText('Pay level', 30),
     date_of_joining: optionalValue(isoDate),
     retirement_date: optionalValue(isoDate),

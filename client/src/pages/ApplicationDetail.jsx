@@ -13,14 +13,17 @@ import formatDate from '../utils/formatDate';
 import getErrorMessage from '../utils/getErrorMessage';
 
 const CHECK_LABELS = {
-  profile_complete: 'Profile complete (designation + date of joining)',
-  service_years: 'Minimum completed service years',
+  profile_complete: 'Profile complete (designation + grade pay)',
+  entitlement: 'Applied quarter type is within grade-pay entitlement',
   existing_allotment: 'No existing quarter allotment',
   station_match: 'Requested station matches posting station',
 };
 
 function checkDetail(name, check) {
-  if (name === 'service_years') return `required ${check.required}, actual ${check.actual}`;
+  if (name === 'entitlement') {
+    if (!check.entitled_type) return 'entitled type could not be determined';
+    return `entitled ${check.label}, applied Type ${check.applied_type}`;
+  }
   if (name === 'profile_complete') return check.missing.length > 0 ? `missing: ${check.missing.join(', ')}` : '';
   if (name === 'station_match') return `requested "${check.requested}", posting "${check.posting || 'not set'}"`;
   return '';
@@ -61,47 +64,30 @@ function EligibilityBlock({ result }) {
   );
 }
 
-function PriorityBlock({ breakdown, score, entry }) {
-  const rows = [
-    ['Essential service', breakdown.essential_service.applies ? 'Yes' : 'No', breakdown.essential_service.points],
-    ['Medical ground', breakdown.medical_ground.applies ? 'Yes' : 'No', breakdown.medical_ground.points],
-    ['Category', breakdown.category.value, breakdown.category.points],
-    ['Seniority', `${breakdown.seniority.years} completed years (max ${breakdown.seniority.cap} pts)`, breakdown.seniority.points],
-    [
-      'Application age',
-      `${breakdown.application_age.months} completed months (max ${breakdown.application_age.cap} pts)`,
-      breakdown.application_age.points,
-    ],
-  ];
+// Hakk (grade pay se) vs jis type ke liye apply kiya, aur waiting list mein jagah (registration date se).
+// Points / score ab nahi hain — rank sirf registration date (waiting since) se aata hai.
+function WaitingListBlock({ application }) {
+  const { entitlement, waiting_entry: entry } = application;
+  const onList = entry && entry.is_active;
 
   return (
     <div className="card">
-      <h2>Priority score: {score}</h2>
-      <table className="table">
-        <tbody>
-          {rows.map(([label, detail, points]) => (
-            <tr key={label}>
-              <td>{label}</td>
-              <td className="muted">{detail}</td>
-              <td className="points">+{points}</td>
-            </tr>
-          ))}
-          <tr>
-            <td>
-              <strong>Total</strong>
-            </td>
-            <td />
-            <td className="points">
-              <strong>{score}</strong>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      {entry && entry.is_active && (
-        <p>
-          Waiting list rank: <strong>{entry.rank}</strong>
-        </p>
-      )}
+      <h2>Entitlement and waiting list</h2>
+      <dl className="details">
+        <dt>Entitled type (from grade pay)</dt>
+        <dd>
+          {entitlement
+            ? `${entitlement.label} (can apply for ${entitlement.allowed_types.map((type) => `Type ${type}`).join(', ')})`
+            : 'Cannot be determined (grade pay missing)'}
+        </dd>
+        <dt>Applied for</dt>
+        <dd>Type {application.preferred_quarter_type}</dd>
+        <dt>Registration date (waiting since)</dt>
+        <dd>{formatDate(onList ? entry.waiting_since : application.applied_at)}</dd>
+        <dt>Waiting list rank</dt>
+        <dd>{onList ? <strong>{entry.rank}</strong> : 'Not on the waiting list'}</dd>
+      </dl>
+      <p className="muted small">Rank is decided by registration date only (earliest first).</p>
     </div>
   );
 }
@@ -247,14 +233,8 @@ function ApplicationDetail() {
         )}
       </div>
 
+      <WaitingListBlock application={application} />
       {application.eligibility_result && <EligibilityBlock result={application.eligibility_result} />}
-      {application.priority_breakdown && (
-        <PriorityBlock
-          breakdown={application.priority_breakdown}
-          score={application.priority_score}
-          entry={application.waiting_entry}
-        />
-      )}
 
       {application.allotments.length > 0 && (
         <div className="card">
@@ -288,9 +268,9 @@ function ApplicationDetail() {
                 type="button"
                 className="btn"
                 disabled={busy}
-                onClick={() => runAction(() => runEngine(application.id), 'Eligibility and priority calculated.')}
+                onClick={() => runAction(() => runEngine(application.id), 'Eligibility checked.')}
               >
-                {status === 'verified' ? 'Run eligibility + priority engine' : 'Re-run engine'}
+                {status === 'verified' ? 'Check eligibility and join waiting list' : 'Re-check eligibility'}
               </button>
             )}
           </div>

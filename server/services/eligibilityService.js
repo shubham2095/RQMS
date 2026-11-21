@@ -1,15 +1,21 @@
 // PURE: koi DB / network nahi. Plain objects lo, plain object lautao — isliye alag se test ho sakta hai.
 const { eligibility } = require('../config/rqms');
-const { completedYears } = require('../utils/serviceYears');
+const { getEntitlement } = require('./entitlementService');
+
+const FIELD_LABELS = { designation: 'designation', grade_pay: 'grade pay' };
 
 function sameText(a, b) {
   return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 }
 
+function isMissing(value) {
+  return value === null || value === undefined || value === '';
+}
+
 // application: { preferred_quarter_type, station }
-// profile:     { designation, date_of_joining, station, has_active_allotment }
-// Returns { eligible, reasons[], checks{ name: { passed, ...detail } } }
-function evaluate(application, profile, asOf = new Date()) {
+// profile:     { designation, grade_pay, is_gazetted, station, has_active_allotment }
+// Returns { eligible, reasons[], checks{ name: { passed, ...detail } }, entitlement }
+function evaluate(application, profile) {
   const checks = {};
   const reasons = [];
 
@@ -19,23 +25,28 @@ function evaluate(application, profile, asOf = new Date()) {
   }
 
   if (eligibility.requireCompleteProfile) {
-    const missing = [];
-    if (!profile.designation) missing.push('designation');
-    if (!profile.date_of_joining) missing.push('date of joining');
+    const missing = eligibility.requiredProfileFields
+      .filter((field) => isMissing(profile[field]))
+      .map((field) => FIELD_LABELS[field] || field);
     record('profile_complete', missing.length === 0, { missing }, `Profile incomplete: ${missing.join(', ')} missing`);
   }
 
-  const type = application.preferred_quarter_type;
-  const required = eligibility.minServiceYears[type];
-  const actual = completedYears(profile.date_of_joining, asOf);
-  if (required === undefined) {
-    record('service_years', false, { required: null, actual }, `Unknown quarter type "${type}"`);
+  // Grade pay (+ gazetted) -> entitled type. Applied type entitled ya usse neeche hona chahiye.
+  const entitled = getEntitlement(profile);
+  const applied = application.preferred_quarter_type;
+  if (!entitled) {
+    record(
+      'entitlement',
+      false,
+      { entitled_type: null, applied_type: applied, allowed_types: [] },
+      'Your entitled quarter type cannot be determined (grade pay missing or not covered by the rules)'
+    );
   } else {
     record(
-      'service_years',
-      actual >= required,
-      { required, actual },
-      `Type ${type} needs ${required} completed service years; you have ${actual}`
+      'entitlement',
+      entitled.allowed_types.includes(applied),
+      { entitled_type: entitled.entitled_type, label: entitled.label, applied_type: applied, allowed_types: entitled.allowed_types },
+      `Type ${applied} is above your entitlement (${entitled.label}); you can apply for ${entitled.allowed_types.map((type) => `Type ${type}`).join(', ')}`
     );
   }
 
@@ -54,7 +65,7 @@ function evaluate(application, profile, asOf = new Date()) {
     );
   }
 
-  return { eligible: reasons.length === 0, reasons, checks };
+  return { eligible: reasons.length === 0, reasons, checks, entitlement: entitled };
 }
 
 module.exports = { evaluate };

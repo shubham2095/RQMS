@@ -95,7 +95,7 @@ async function suggestFor(quarterId) {
     });
     applicant = {
       rank: entry.rank,
-      priority_score: entry.priority_score,
+      waiting_since: entry.waiting_since, // registration date
       application_id: application.id,
       reference_no: application.reference_no,
       application_status: application.status,

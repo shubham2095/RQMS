@@ -25,6 +25,9 @@ const updateUserSchema = z.object({
   password: password.optional(),
   role_slugs: roleSlugs.optional(),
   is_active: z.boolean('is_active must be true or false').optional(),
+  // User ke employee profile ke entitlement fields (sirf tab jab profile bana ho)
+  grade_pay: z.number('Grade pay must be a number').int('Grade pay must be a whole number').min(1, 'Grade pay must be at least 1').optional(),
+  is_gazetted: z.boolean('is_gazetted must be true or false').optional(),
 });
 
 module.exports = { createUserSchema, updateUserSchema };

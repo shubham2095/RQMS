@@ -29,8 +29,15 @@ function ApplyForQuarter() {
     getProfile()
       .then((data) => {
         setProfile(data);
-        // Posting station se prefill (eligibility mein station match zaroori hai)
-        if (data && data.station) setForm((prev) => ({ ...prev, station: data.station }));
+        // Posting station se prefill (eligibility mein station match zaroori hai);
+        // quarter type entitled type se shuru (grade pay se)
+        if (data) {
+          setForm((prev) => ({
+            ...prev,
+            station: data.station || prev.station,
+            preferred_quarter_type: data.entitlement ? data.entitlement.entitled_type : prev.preferred_quarter_type,
+          }));
+        }
       })
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
@@ -73,19 +80,40 @@ function ApplyForQuarter() {
       <div>
         <h1>Apply for Quarter</h1>
         <p className="form-error">
-          Please <Link to="/profile">complete your profile</Link> first. Your service details are used to
-          check eligibility and priority.
+          Please <Link to="/profile">complete your profile</Link> first. Your grade pay decides which quarter type
+          you are entitled to.
         </p>
       </div>
     );
   }
 
+  // Grade pay nahi ya kisi rule mein nahi aata -> entitled type pata nahi, apply nahi ho sakta
+  if (!profile.entitlement) {
+    return (
+      <div>
+        <h1>Apply for Quarter</h1>
+        <p className="form-error">
+          Your entitled quarter type cannot be determined. Please add your grade pay in{' '}
+          <Link to="/profile">My Profile</Link>.
+        </p>
+      </div>
+    );
+  }
+
+  const entitlement = profile.entitlement;
+
   return (
     <div>
       <h1>Apply for Quarter</h1>
+      <p>
+        Your entitled quarter type: <strong>{entitlement.label}</strong> (grade pay {profile.grade_pay}
+        {profile.is_gazetted ? ', gazetted' : ''}). You can apply for{' '}
+        {entitlement.allowed_types.map((type) => `Type ${type}`).join(', ')}.
+      </p>
       <p className="muted">
-        Your category, service type and service details are taken from your profile
-        ({profile.employee_id}). Eligibility is checked after the clerk verifies your application.
+        Your profile ({profile.employee_id}) details are used for your application. Your place in the waiting list is
+        decided by your registration date, i.e. the day you apply. Eligibility is checked after the clerk verifies
+        your application.
       </p>
 
       <form className="card" onSubmit={handleSubmit}>
@@ -95,7 +123,7 @@ function ApplyForQuarter() {
               value={form.preferred_quarter_type}
               onChange={(e) => updateField('preferred_quarter_type', e.target.value)}
             >
-              {QUARTER_TYPES.map((type) => (
+              {QUARTER_TYPES.filter((type) => entitlement.allowed_types.includes(type)).map((type) => (
                 <option key={type} value={type}>
                   Type {type}
                 </option>

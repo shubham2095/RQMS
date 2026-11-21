@@ -8,7 +8,7 @@ const SUPER_ADMIN = 'super_admin';
 
 const userInclude = [
   { model: Role, as: 'roles', through: { attributes: [] } },
-  { model: EmployeeProfile, as: 'profile', attributes: ['employee_id'] },
+  { model: EmployeeProfile, as: 'profile', attributes: ['id', 'employee_id', 'grade_pay', 'is_gazetted'] },
 ];
 
 function toSummary(user) {
@@ -18,6 +18,9 @@ function toSummary(user) {
     email: user.email,
     is_active: user.is_active,
     employee_id: user.profile ? user.profile.employee_id : null,
+    has_profile: Boolean(user.profile),
+    grade_pay: user.profile ? user.profile.grade_pay : null,
+    is_gazetted: user.profile ? user.profile.is_gazetted : null,
     roles: user.roles.map((role) => ({ id: role.id, slug: role.slug, name: role.name })),
     created_at: user.createdAt, // model attribute createdAt hai (column created_at)
   };
@@ -97,6 +100,14 @@ async function updateUser(actor, id, data) {
     throw httpError(400, 'You cannot change your own roles');
   }
 
+  // Entitlement fields employee profile par jaate hain — profile na ho to saaf error
+  const profileChanges = {};
+  if (data.grade_pay !== undefined) profileChanges.grade_pay = data.grade_pay;
+  if (data.is_gazetted !== undefined) profileChanges.is_gazetted = data.is_gazetted;
+  if (Object.keys(profileChanges).length > 0 && !user.profile) {
+    throw httpError(400, 'This user has not saved an employee profile yet, so grade pay / gazetted cannot be set');
+  }
+
   const roles = data.role_slugs ? await findRolesBySlugs(data.role_slugs) : null;
   const changes = {};
   if (data.name !== undefined) changes.name = data.name;
@@ -108,6 +119,9 @@ async function updateUser(actor, id, data) {
     await sequelize.transaction(async (transaction) => {
       await user.update(changes, { transaction });
       if (roles) await user.setRoles(roles, { transaction });
+      if (user.profile && Object.keys(profileChanges).length > 0) {
+        await EmployeeProfile.update(profileChanges, { where: { id: user.profile.id }, transaction });
+      }
     });
   } catch (err) {
     if (isUniqueError(err)) throw httpError(409, 'A user with this email already exists');

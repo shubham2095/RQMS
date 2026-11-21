@@ -19,6 +19,7 @@ const emptyProfile = {
   category: 'GENERAL',
   service_type: 'non_essential',
   grade_pay: '',
+  is_gazetted: false,
   pay_level: '',
   date_of_joining: '',
   retirement_date: '',
@@ -125,7 +126,7 @@ function MyProfile() {
               required
             />
           </FormField>
-          <FormField label="Designation">
+          <FormField label="Designation (needed for eligibility)">
             <input value={form.designation} onChange={(e) => updateField('designation', e.target.value)} />
           </FormField>
           <FormField label="Department">
@@ -158,14 +159,23 @@ function MyProfile() {
               ))}
             </select>
           </FormField>
-          <FormField label="Grade pay">
+          <FormField label="Grade pay *">
             <input
               type="number"
-              min="0"
+              min="1"
               value={form.grade_pay}
               onChange={(e) => updateField('grade_pay', e.target.value)}
+              required
             />
           </FormField>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={form.is_gazetted}
+              onChange={(e) => updateField('is_gazetted', e.target.checked)}
+            />
+            Gazetted officer
+          </label>
           <FormField label="Pay level">
             <input value={form.pay_level} onChange={(e) => updateField('pay_level', e.target.value)} />
           </FormField>
@@ -184,6 +194,18 @@ function MyProfile() {
             />
           </FormField>
         </div>
+
+        <p className="muted">
+          Entitled quarter type (from grade pay{profile ? ' as last saved' : ''}):{' '}
+          {profile && profile.entitlement ? (
+            <strong>
+              {profile.entitlement.label} (you can apply for{' '}
+              {profile.entitlement.allowed_types.map((type) => `Type ${type}`).join(', ')})
+            </strong>
+          ) : (
+            'save your grade pay to see it'
+          )}
+        </p>
 
         {message && (
           <p className={message.type === 'error' ? 'form-error' : 'form-success'}>{message.text}</p>

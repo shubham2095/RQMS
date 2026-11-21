@@ -11,6 +11,7 @@ import {
   updateQuarter,
 } from '../services/quarterService';
 import { MANUAL_QUARTER_STATUSES, QUARTER_STATUSES, QUARTER_TYPES } from '../utils/constants';
+import formatDate from '../utils/formatDate';
 import getErrorMessage from '../utils/getErrorMessage';
 
 const emptyFilters = { type: '', station: '', status: '' };
@@ -273,8 +274,8 @@ function Quarters() {
               <dd>
                 {suggestion.applicant.name} ({suggestion.applicant.employee_id})
               </dd>
-              <dt>Priority score</dt>
-              <dd>{suggestion.applicant.priority_score}</dd>
+              <dt>Registered on</dt>
+              <dd>{formatDate(suggestion.applicant.waiting_since)}</dd>
               <dt>Application</dt>
               <dd>
                 <Link to={`/applications/${suggestion.applicant.application_id}`}>{suggestion.applicant.reference_no}</Link>{' '}

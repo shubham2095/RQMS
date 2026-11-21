@@ -1,10 +1,15 @@
 const { WaitingListEntry, QuarterApplication, EmployeeProfile, User } = require('../models');
+const { getEntitlement } = require('./entitlementService');
 
-// Queue key = (quarter_type, station). Order: priority_score DESC, waiting_since ASC (jo pehle apply kiya), id ASC.
+// Queue key = (quarter_type, station).
+// TODO(reservation): SC/ST special list alag queue hogi (reserved quota); abhi sab ek general list hai.
+//
+// Order = REGISTRATION DATE (CLAUDE.md section 11): waiting_since (= application.applied_at) ASC —
+// jo pehle register kare wo upar. Barabar ho to application id ASC (= registration ka order; waiting entry id nahi,
+// wo to tab banti hai jab clerk engine chalata hai). Points / priority_score se koi lena-dena nahi.
 const RANK_ORDER = [
-  ['priority_score', 'DESC'],
   ['waiting_since', 'ASC'],
-  ['id', 'ASC'],
+  ['quarter_application_id', 'ASC'],
 ];
 
 function lockOption(transaction) {
@@ -26,13 +31,12 @@ async function reRank(quarterType, station, transaction) {
   return entries;
 }
 
-// Application ko uski queue mein daalo (ya score update karo) aur re-rank karo.
+// Application ko uski queue mein daalo (ya dobara active karo) aur re-rank karo.
 async function place(application, transaction) {
   const values = {
     quarter_type: application.preferred_quarter_type,
     station: application.station,
-    priority_score: application.priority_score || 0,
-    waiting_since: application.applied_at,
+    waiting_since: application.applied_at, // registration date
     is_active: true,
   };
 
@@ -63,29 +67,36 @@ async function remove(application, transaction) {
 }
 
 // Display ke liye queue: filters { type, station } optional. Rank order mein.
+// Har entry ke saath employee ka abhi ka entitled type (grade pay se) bhi.
 async function queue(filters = {}) {
   const where = { is_active: true };
   if (filters.type) where.quarter_type = filters.type;
   if (filters.station) where.station = filters.station;
 
-  return WaitingListEntry.findAll({
+  const entries = await WaitingListEntry.findAll({
     where,
     order: [['quarter_type', 'ASC'], ['station', 'ASC'], ...RANK_ORDER],
     include: [
       {
         model: QuarterApplication,
         as: 'application',
-        attributes: ['id', 'reference_no', 'status', 'category', 'service_type', 'medical_ground', 'applied_at'],
+        attributes: ['id', 'reference_no', 'status', 'category', 'service_type', 'applied_at'],
         include: [
           {
             model: EmployeeProfile,
             as: 'employee',
-            attributes: ['id', 'employee_id', 'designation'],
+            attributes: ['id', 'employee_id', 'designation', 'grade_pay', 'is_gazetted'],
             include: [{ model: User, as: 'user', attributes: ['name'] }],
           },
         ],
       },
     ],
+  });
+
+  return entries.map((entry) => {
+    const result = entry.toJSON();
+    result.entitlement = getEntitlement(entry.application.employee);
+    return result;
   });
 }
 

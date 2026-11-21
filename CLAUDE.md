@@ -12,7 +12,7 @@ RQMS ek **role-based workflow system** hai jo railway quarters ka poora lifecycl
 
 Do core flows:
 
-- **Allotment (Part 1):** Employee apply karta hai → Clerk verify → System eligibility + priority points nikalta hai → waiting list rank → Estate Officer approve → vacant quarter ka offer → employee accept → Clerk possession record → occupancy start + certificates.
+- **Allotment (Part 1):** Employee apply karta hai → Clerk verify → System eligibility + priority nikalta hai → waiting list rank → Estate Officer approve → vacant quarter ka offer → employee accept → Clerk possession record → occupancy start + certificates.
 - **Vacation (Part 2):** Employee vacation request → 5-step clearance chain (Clerk inspection → Electrical → Water → Accounts → Estate Officer) → System NOC + No-Due + Handover certificate generate → quarter wapas vacant.
 - **Retirement:** retention period tracking, expiry alerts, overstay penalty auto-calculation.
 
@@ -51,7 +51,7 @@ Env: `server/.env` (template `server/.env.example`), `server/config/env.js` use 
 /server
   server.js        -> express app setup (helmet, cors, rate-limit, routes, error handler) + listen
   .env  .env.example
-  /config          -> env.js, db.js (Sequelize instance), rqms.js (points/eligibility/retention/clearance rules)
+  /config          -> env.js, db.js (Sequelize instance), rqms.js (entitlement/eligibility/retention/clearance rules)
   /controllers     -> thin: request parse + response, logic services ko
   /middleware      -> auth, requireRole, requirePermission, auditRequest
   /migrations      -> umzug .js migrations (ordered by filename: 001-xxx.js ...)
@@ -136,18 +136,18 @@ Har screen/route sahi role/permission se guard karo. Employee ko sirf apna kaam 
 **Allotment flow (Phase 3 — done):**
 - Application status: `submitted → verified → (run-engine) waitlisted | ineligible → approved → allotted`; `rejected` kahin bhi (allotted se pehle). Clerk (`application.verify`): verify + run-engine (verified/ineligible/waitlisted par chalta hai, dobara chala sakte hain). Estate officer (`application.decide`): approve (sirf waitlisted se) / reject (remarks zaroori).
 - Ek employee ki ek hi open application (`openApplicationStatuses` in config). Ek `allotted` application tab tak open hai jab tak uski allotment live hai (`liveAllotmentStatuses`: offered/accepted/possession_taken) — quarter khali karne (vacated) ke baad naya apply kar sakta hai. `service_type`/`category`/`division` apply par snapshot. `waiting_since` = `applied_at`.
-- Engine pure hai: `eligibilityService.evaluate(application, profile, asOf)` aur `priorityService.calculate({service_type, category, medical_ground, date_of_joining, waiting_since}, asOf)` — koi DB nahi. Score run-engine par save hota hai (age/seniority ka daily refresh Phase 5 mein).
-- Waiting list: queue = (quarter_type, station); `priority_score DESC, waiting_since ASC, id ASC`; `waitingListService.place/reRank/remove/queue`. Remove = `is_active=false, rank=NULL` (history rehti hai).
+- Engine pure hai (Phase 3-R ke baad, §7): `entitlementService.getEntitlement({grade_pay, is_gazetted})` aur `eligibilityService.evaluate(application, profile)` — koi DB nahi, koi points/score nahi (`priorityService` hata diya).
+- Waiting list: queue = (quarter_type, station); order **registration date** `waiting_since ASC, quarter_application_id ASC`; `waitingListService.place/reRank/remove/queue`. Remove = `is_active=false, rank=NULL` (history rehti hai).
 - Offer (`allotment.approve`): quarter ki queue ka rank-1 entry; **application `approved` na ho to offer refuse (400)** — koi skip nahi hota. Sab `sequelize.transaction` + row locks (quarter, queue). Offer par: quarter `allotted`, application `allotted`, entry hatao + re-rank, ALLOTMENT_ORDER certificate. Employee accept/reject (`respond`): reject par quarter `vacant` + application `rejected` (naya apply kar sakta hai). Possession (`allotment.possession`, sirf accepted par): quarter `occupied` + occupant, occupancy row, `has_active_allotment=true`, POSSESSION_LETTER + OCCUPANCY_CERTIFICATE.
 - Numbers: application `QA-YYYYMMDD-NNNN`, allotment order `AO-YYYYMMDD-NNNN` (daily sequence, `utils/referenceNumber.js`), certificate `ALO|POL|OCC-YYYYMMDD-XXXXXX`.
 - Files: uploads (`documents`, polymorphic) aur certificates (PDF via pdfkit) `config/storage.js` ki dirs mein (`UPLOADS_DIR` / `CERTIFICATES_DIR` env, default repo-root `uploads/` `certificates/`); DB mein relative filename. Download: `GET /api/documents/:id/download`, `GET /api/certificates/:id/download` (owner ya staff). Certificate generate flow ke AAKHIR mein, transaction ke andar.
 - `TODO(Phase 5)` comments services mein: audit log + notification yahin lagenge. JSON columns ke liye `utils/jsonField.js` (MariaDB JSON ko text deta hai).
-- Demo data (dev only): `employee2/3/4@rqms.test` = EMP1002 (essential, SC, ~21 yrs), EMP1003 (GENERAL, ~4 yrs), EMP1004 (OBC, ~16 yrs) — ranking test ke liye. Optional env `API_RATE_LIMIT` (default 300 req / 15 min).
+- Demo data (dev only): `employee2/3/4@rqms.test` = EMP1002, EMP1003, EMP1004; Phase 3-R seeders 006/007 inhe grade pay + gazetted dete hain (EMP1001 GP4600→IV, 1002 GP4200→III, 1003 GP2400→II, 1004 GP7600 gazetted→V) aur Lucknow IV/V quarters + backdated waitlist EMP1005–1007 (Type III, 2025-02-03 / 2025-09-15 / 2026-03-01) add karte hain. Optional env `API_RATE_LIMIT` (default 300 req / 15 min).
 
 **Vacation flow (Phase 4 — done):**
 - Employee (`possession_taken` allotment) -> `POST /api/vacations` (`vacationWorkflowService.initiate`): request `VAC-YYYYMMDD-NNNN`, status `in_clearance`, `current_step` = pehla step, 5 `vacation_clearances` rows (pending, sequence 1..5), quarter `vacation_pending`. Ek allotment par ek hi open request. `requested_vacation_date` >= possession date, <= 1 saal aage. `trigger = retirement` par retirement record Phase 5 (TODO marker service mein).
 - Steps (config `vacationClearanceSteps`, order fixed) aur unki permission (`vacationStepPermissions`): clerk_inspection -> `vacation.clerk_inspection`, electrical -> `vacation.electrical`, water -> `vacation.water`, accounts -> `vacation.accounts`, estate_officer -> `vacation.estate_officer`. super_admin bypass.
-- `POST /api/vacations/:id/act` body `{ step, decision: 'approve'|'reject', remarks?, ...optional }`: `step` current step se match na kare to 400 (stale click), us step ki permission na ho to 403. **Har step sirf approve/reject hai**; `has_damage` (clerk), `meter_reading` (electrical), `dues_amount` (electrical/water/accounts) OPTIONAL informational fields hain — timeline par record hote hain, approve ko kabhi block nahi karte. Reject par remarks zaroori.
+- `POST /api/vacations/:id/act` body `{ step, decision: 'approve'|'reject', remarks?, ...optional }`: `step` current step se match na kare to 400 (stale click), us step ki permission na ho to 403. **Har step sirf approve/reject hai**; `has_damage` (clerk, 3-way: not recorded/no damage/damage found), `meter_reading` (electrical), `dues_amount` (electrical/water/accounts) OPTIONAL informational fields hain — timeline par record hote hain, approve ko kabhi block nahi karte. Reject par remarks zaroori.
 - Approve: electrical -> ELECTRICAL_CLEARANCE, water -> WATER_CLEARANCE certificate; last step approve hote hi `complete()` usi transaction mein: request `completed`, allotment `vacated` (+ `vacated_on` = aaj), quarter `vacant` + occupant null, profile `has_active_allotment=false`, occupancy band (`end_date` = aaj), VACATION_NOC + NO_DUE_CERTIFICATE + HANDOVER_CERTIFICATE (payload mein har step ka recorded data).
 - Reject kisi bhi step par: request `rejected` (terminal), baaki steps pending, quarter wapas `occupied`, allotment/profile flag same; employee nayi request file kar sakta hai. Status `cleared` enum mein hai par kabhi save nahi hota.
 - Listing: employee = apni; staff (koi bhi `vacation.*`) = sab, `waiting_for_me=true` = jo abhi mere step par hain; detail mein `can_act`. Certificates download `GET /api/certificates/:id/download` (owner ya vacation staff).
@@ -177,39 +177,30 @@ VacationTrigger = transfer/retirement/resignation/death/voluntary
 
 ---
 
-## 7. Business rules (config-driven — `server/config/rqms.js`)
+## 7. Business rules — AS-BUILT (Phase 3-R: real rules, §11)
 
-### Priority points (higher = behtar rank)
-- Essential service: **+50**
-- Medical ground: **+30**
-- Category: SC **+20**, ST **+20**, OBC **+10**, General **0**
-- Seniority: **+1 per completed service year**, cap **15**
-- Application age: **+1 per completed month waiting**, cap **10**
-- Total score = sab ka sum. Breakdown save karo (audit/transparency ke liye).
+> Engine Master Circular 49 ke hisaab se realign ho chuka hai (Phase 3-R). Purana points formula aur service-years eligibility **hata diye gaye**. Saare numbers `config/rqms.js` mein.
 
-### Eligibility (apply karne ke liye minimum completed service years, quarter type ke hisaab se)
-- Type I: 0 · II: 0 · III: 3 · IV: 7 · V: 12 · VI: 18
-- `block_if_existing_allotment = true` → active quarter wala apply nahi kar sakta
-- Requested station = posting station hona chahiye
-- Profile complete ho (designation + date_of_joining)
-- Result structured return karo: `{ eligible, reasons[], checks{} }`
+### Eligibility = Grade Pay (+ gazetted) → Quarter Type (`config.entitlement`, `entitlementService`)
+- Non-gazetted: GP ≤1800 → I · 1801–2400 → II · 2401–4200 → III · ≥4201 → IV
+- Gazetted: GP ≤6599 → IV · GP 6600 → "Type IV Special" (stored/treated as **IV**, kyunki hum sirf I–VI store karte hain) · GP ≥6601 → V
+- Bounds integer-inclusive (grade pay INT hai). **Type VI auto-mapping mein nahi** (assignable hai, par kisi grade pay se entitled nahi) — TODO. Running staff ka alag mapping (circular 2.2) — TODO.
+- Entitled type **ya usse neeche** ke liye apply kar sakte hain (`entitlement.allowLowerTypes = true`).
+- Checks: `profile_complete` (designation + grade_pay; `eligibility.requiredProfileFields`) · `entitlement` · `existing_allotment` (block) · `station_match`. Result `{ eligible, reasons[], checks{}, entitlement }`.
+- `employee_profiles.is_gazetted` (default false). Employee profile par grade pay ZAROORI; admin bhi `grade_pay`/`is_gazetted` badal sakta hai (Users screen). Known: entitlement self-declared hai — clerk ka verify step hi control hai.
 
-### Waiting list ranking
-- Queue key = (quarter_type, station)
-- Order: `priority_score DESC`, tie-break `waiting_since ASC` (jo pehle apply kiya)
-- Koi bhi change hone par us queue ki re-rank karo
+### Waiting list ranking = REGISTRATION DATE
+- Queue = (quarter_type, station); order `waiting_since` (= `applied_at`) ASC, tie `quarter_application_id` ASC. Earliest registration = rank 1. Change par re-rank. `priority_score` columns bache hain par ab use/likhe nahi jaate.
+- `service_type` (essential/non-essential) aur caste `category` snapshot mein rehte hain, ranking nahi chalate.
+
+### Reservation (SC/ST quota) — **PENDING, implement nahi**
+- `config.reservation` sirf placeholder (`enabled:false`; I–II 10%, III–IV 5%, 50-quarter threshold). Code mein `TODO(reservation)` markers (`waitingListService`, `applicationService`). Client se confirm baaki: OBC, essential/non-essential determination, 50-quarter threshold.
 
 ### Retirement
-- Retention period: **120 days** (retirement date se)
-- Overstay penalty: **₹250 / day**
-- Expiry alert: expiry se **15 days** pehle
-- Daily cycle: expiring → alert, expiry ke baad → overstaying + penalty calc
+- Retention 120 days · overstay ₹250/day · alert 15 days pehle · daily cycle (expiring→alert, expired→overstaying+penalty).
 
-### Allotment (transaction mein karo)
-- Vacant quarter → waiting list ka rank-1 → offer → allotment order no auto-generate (`AO-YYYYMMDD-XXXX`)
-- Offer par: quarter = `allotted`, application = `allotted`, waiting entry hatao
-- Accept → possession record → occupancy create, quarter = `occupied`, profile `has_active_allotment = true`, certificates generate
-- Reject → quarter wapas `vacant`
+### Allotment (transaction)
+- Vacant quarter → rank-1 → offer → order no auto → quarter/application `allotted` → accept → possession → occupancy + `occupied` + certificates. Reject → `vacant`.
 
 ---
 
@@ -222,13 +213,12 @@ VacationTrigger = transfer/retirement/resignation/death/voluntary
 `documents` (polymorphic), `certificates` (polymorphic),
 `notification_logs`, `audit_logs`.
 
-> Full column list purane Laravel migrations se liya gaya hai — har table banate waqt wahi columns + FKs + indexes rakho. Reference phase plan mein diya hai.
-
 Key points:
-- `quarter_applications` par apply ke waqt `service_type` aur `category` ka **snapshot** rakho (baad mein profile badle to rank na bigde).
-- `eligibility_result` aur `priority_breakdown` JSON columns mein store karo.
-- `documents` aur `certificates` polymorphic hain (`documentable_type/id`, `certifiable_type/id`).
-- `audit_logs` — har important action log ho (user, action, affected model, before/after, ip, time).
+- `quarter_applications` par apply ke waqt `service_type` aur `category` ka **snapshot**.
+- `eligibility_result` JSON column. (`priority_score`/`priority_breakdown` legacy columns, ab unused.)
+- `documents`/`certificates` polymorphic (`documentable_type/id`, `certifiable_type/id`).
+- `audit_logs` — har important action log (user, action, affected model, before/after, ip, time).
+- `employee_profiles` mein `grade_pay`, `is_gazetted` (migration 017), `pay_level`, `service_type`, `category` — entitlement `grade_pay` + `is_gazetted` se.
 
 ---
 
@@ -242,6 +232,47 @@ retirements(+run-cycle) · certificates(download) · notifications · reports ·
 
 ## 10. Build order
 
-Phase 0 setup → 1 auth+RBAC → 2 master data (quarters/users) → 3 allotment flow →
-4 vacation flow → 5 retirement + cross-cutting (audit/documents/certificates/dashboard) → 6 deploy.
-Ek phase complete + test, phir agla. Detail `RQMS_BUILD_PLAN.md` mein.
+Phase 0 setup → 1 auth+RBAC → 2 master data → 3 allotment flow → 4 vacation flow →
+**3-R engine realign (§11) — DONE** → 5 retirement + cross-cutting (audit/documents/certificates/dashboard) → 6 deploy.
+Phases 0–4 + 3-R DONE. Detail `RQMS_BUILD_PLAN.md` mein.
+
+---
+
+## 11. REAL allotment rules (Master Circular No. 49, 2019 + client data)
+
+> Client ne official **Railway Board Master Circular No. 49 (updated Aug 2019)** + real priority lists (gazetted officers) + possession/requisition report (non-gazetted staff) diye. **Eligibility + waiting-list ordering Phase 3-R mein implement ho chuki (§7).** Reservation aur neeche ke concepts abhi pending hain.
+
+### Eligibility = Grade Pay → Quarter Type (service years se NAHI)
+- GP ≤ 1800 → **Type-I**
+- GP > 1800 up to 2400 → **Type-II**
+- GP > 2400 up to 4200 → **Type-III**
+- GP > 4200 → **Type-IV**
+- Gazetted GP < 6600 → **Type-IV** · Gazetted GP 6600 → **Type-IV Special** · Gazetted GP > 6600 → **Type-V**
+- Running staff (Loco Pilot, Guard, Fireman, ALP…) ka alag grade-pay→type mapping hai (circular section 2.2).
+
+### Waiting list = Registration/Request date order (points formula se NAHI)
+- Real lists **registration date (`Reg Date` / request date)** ke hisaab se order hoti hain — jo pehle register kare wo upar.
+- Har **quarter type ki alag waiting list** (aur gazetted/non-gazetted alag pools).
+- "Refusal" par priority date effectively change ho jaati hai (refusal date), "priority transferred from NR/HQ" (zone transfer), change-of-quarter requests — ye bhi real data mein dikhe.
+
+### "Category" = Essential vs Non-essential service (caste NAHI)
+- Possession report mein "Category: Essential" = service criticality (humara `service_type`), **caste nahi**.
+
+### Caste = SC/ST reservation QUOTA (points nahi; OBC nahi)
+- Reservation: **Type-I & II mein 10%**, **Type-III & IV mein 5%** — jahan station par 50+ quarters (I & II milakar count).
+- **Sirf non-essential categories** mein lagu.
+- **Do waiting lists:** ek general + ek SC/ST special; special list sirf reserved quota ke liye chalti hai. SC/ST jo general seniority pe aa jayein, unki allotment reserved quota mein count nahi hoti.
+- **OBC ka koi reservation nahi** quarters mein (circular mein sirf SC/ST).
+
+### Aur concepts (real system mein maujood)
+Gazetted vs non-gazetted pools · out-of-turn allotment (alag register, date-of-registration order) · medical ad-hoc ~5% quota · husband-wife same station rule · multiple colony preferences (Place of Registration 1/2/3) · retention on transfer/retirement (Phase 5 already).
+
+### Phase 3-R status
+Done: grade-pay entitlement, registration-date ranking, `is_gazetted`. **Pending:** reservation roster + SC/ST special list, running-staff mapping, Type IV Special as a separate stored type, Type VI mapping.
+
+### OPEN QUESTIONS (client se confirm)
+1. OBC quarters reservation mein count hota hai? (circular: sirf SC/ST)
+2. Waiting list order pure registration date se, ya service-length seniority bhi? (abhi: pure registration date)
+3. Gazetted + non-gazetted dono scope mein, ya ek?
+4. Essential vs non-essential kaise decide (designation list se)?
+5. Out-of-turn / medical quota / refusal-date / priority transfer / change-of-quarter / husband-wife — in mein se kya scope mein?

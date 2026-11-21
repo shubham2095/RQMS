@@ -10,7 +10,7 @@ const {
   Quarter,
 } = require('../models');
 const eligibilityService = require('./eligibilityService');
-const priorityService = require('./priorityService');
+const { getEntitlement } = require('./entitlementService');
 const waitingListService = require('./waitingListService');
 const { hasAnyPermission } = require('./userAccessService');
 const { openApplicationStatuses, liveAllotmentStatuses } = require('../config/rqms');
@@ -23,10 +23,11 @@ const listInclude = [
   {
     model: EmployeeProfile,
     as: 'employee',
-    attributes: ['id', 'employee_id', 'designation', 'station'],
+    attributes: ['id', 'employee_id', 'designation', 'station', 'grade_pay', 'is_gazetted'],
     include: [{ model: User, as: 'user', attributes: ['name'] }],
   },
-  { model: WaitingListEntry, as: 'waiting_entry', attributes: ['id', 'rank', 'priority_score', 'is_active'] },
+  // Rank registration date (waiting_since) se aata hai — score se nahi
+  { model: WaitingListEntry, as: 'waiting_entry', attributes: ['id', 'rank', 'waiting_since', 'is_active'] },
 ];
 
 const detailInclude = [
@@ -86,7 +87,11 @@ async function get(id, actor) {
     const profile = await findOwnProfile(actor);
     if (!profile || profile.id !== application.employee_profile_id) throw httpError(404, 'Application not found');
   }
-  return application;
+
+  // Employee ke grade pay se abhi ka entitled type (engine chalne se pehle bhi dikhe)
+  const result = application.toJSON();
+  result.entitlement = getEntitlement(application.employee);
+  return result;
 }
 
 // ---------- apply ----------
@@ -177,10 +182,12 @@ async function verify(id, actor) {
   return get(id, actor);
 }
 
-// ---------- clerk: eligibility + priority engine ----------
+// ---------- clerk: eligibility check -> waiting list ----------
 
 const ENGINE_STATUSES = ['verified', 'ineligible', 'waitlisted'];
 
+// Sirf eligibility (grade pay -> quarter type + baaki checks). Eligible ho to waiting list mein
+// (rank = registration date order), warna ineligible. Koi points / score nahi.
 async function runEngine(id, actor) {
   await sequelize.transaction(async (transaction) => {
     const application = await QuarterApplication.findByPk(id, lock(transaction));
@@ -190,30 +197,20 @@ async function runEngine(id, actor) {
     }
 
     const profile = await EmployeeProfile.findByPk(application.employee_profile_id, { transaction });
-    const now = new Date();
-
-    const eligibilityResult = eligibilityService.evaluate(application, profile, now);
-    const { score, breakdown } = priorityService.calculate(
-      {
-        service_type: application.service_type, // snapshot
-        category: application.category, // snapshot
-        medical_ground: application.medical_ground,
-        date_of_joining: profile.date_of_joining,
-        waiting_since: application.applied_at,
-      },
-      now
-    );
+    const eligibilityResult = eligibilityService.evaluate(application, profile);
 
     await application.update(
       {
         eligibility_result: eligibilityResult,
-        priority_breakdown: breakdown,
-        priority_score: score,
+        // Purane points ke columns ab use nahi hote; re-run par purani values saaf kar do
+        priority_score: null,
+        priority_breakdown: null,
         status: eligibilityResult.eligible ? 'waitlisted' : 'ineligible',
       },
       { transaction }
     );
 
+    // TODO(reservation): yahan SC/ST special list (reserved quota) ka decision aayega — abhi sab ek general list mein.
     if (eligibilityResult.eligible) {
       await waitingListService.place(application, transaction);
     } else {

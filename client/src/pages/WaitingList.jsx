@@ -64,8 +64,8 @@ function WaitingList() {
     <div>
       <h1>Waiting List</h1>
       <p className="muted">
-        One queue per quarter type and station. Ranked by priority score (highest first); equal scores go to the
-        earlier applicant.
+        One queue per quarter type and station. Ranked by registration date: whoever registered (applied) first is
+        at the top.
       </p>
 
       <form className="toolbar" onSubmit={applyFilters}>
@@ -111,11 +111,8 @@ function WaitingList() {
                 <tr>
                   <th>Rank</th>
                   <th>Applicant</th>
-                  <th>Category</th>
-                  <th>Service</th>
-                  <th>Medical</th>
-                  <th>Score</th>
-                  <th>Waiting since</th>
+                  <th>Entitled type</th>
+                  <th>Registration date</th>
                   <th>Status</th>
                   <th />
                 </tr>
@@ -129,10 +126,7 @@ function WaitingList() {
                     <td>
                       {entry.application.employee.user.name} ({entry.application.employee.employee_id})
                     </td>
-                    <td>{entry.application.category}</td>
-                    <td>{entry.application.service_type.replace('_', '-')}</td>
-                    <td>{entry.application.medical_ground ? 'Yes' : '-'}</td>
-                    <td>{entry.priority_score}</td>
+                    <td>{entry.entitlement ? entry.entitlement.label : '-'}</td>
                     <td>{formatDate(entry.waiting_since)}</td>
                     <td>
                       <StatusBadge status={entry.application.status} />

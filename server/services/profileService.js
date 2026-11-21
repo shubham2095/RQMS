@@ -1,13 +1,20 @@
 const { EmployeeProfile, FamilyMember } = require('../models');
+const { getEntitlement } = require('./entitlementService');
 const httpError = require('../utils/httpError');
 const { isUniqueError } = require('../utils/dbErrors');
 
 const withFamily = [{ model: FamilyMember, as: 'family_members' }];
 const familyOrder = [[{ model: FamilyMember, as: 'family_members' }, 'id', 'ASC']];
 
-// Current user ka profile + family. Profile abhi bana nahi to null.
+// Current user ka profile + family + entitled quarter type (grade pay se; na nikle to null).
+// Profile abhi bana nahi to null.
 async function getProfile(userId) {
-  return EmployeeProfile.findOne({ where: { user_id: userId }, include: withFamily, order: familyOrder });
+  const profile = await EmployeeProfile.findOne({ where: { user_id: userId }, include: withFamily, order: familyOrder });
+  if (!profile) return null;
+
+  const result = profile.toJSON();
+  result.entitlement = getEntitlement(profile);
+  return result;
 }
 
 // Apna profile create ya update (upsert). `data` validated hai (profileValidator).

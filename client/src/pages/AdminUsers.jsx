@@ -4,7 +4,15 @@ import useAuth from '../hooks/useAuth';
 import { createUser, listRoles, listUsers, updateUser } from '../services/adminService';
 import getErrorMessage from '../utils/getErrorMessage';
 
-const emptyForm = { name: '', email: '', password: '', role_slugs: [], is_active: true };
+const emptyForm = {
+  name: '',
+  email: '',
+  password: '',
+  role_slugs: [],
+  is_active: true,
+  grade_pay: '', // employee profile ke fields — sirf tab jab user ka profile bana ho
+  is_gazetted: false,
+};
 
 function userToForm(user) {
   return {
@@ -13,6 +21,8 @@ function userToForm(user) {
     password: '', // khali = purana password rahega
     role_slugs: user.roles.map((role) => role.slug),
     is_active: user.is_active,
+    grade_pay: user.grade_pay === null || user.grade_pay === undefined ? '' : user.grade_pay,
+    is_gazetted: Boolean(user.is_gazetted),
   };
 }
 
@@ -90,10 +100,20 @@ function AdminUsers() {
     setSaving(true);
     try {
       if (editing === 'new') {
-        await createUser(form);
+        // profile fields create par nahi bhejte (profile employee khud banata hai)
+        const newUser = { ...form };
+        delete newUser.grade_pay;
+        delete newUser.is_gazetted;
+        await createUser(newUser);
       } else {
         const payload = { ...form };
         if (!payload.password) delete payload.password;
+        if (editing.has_profile && payload.grade_pay !== '') {
+          payload.grade_pay = Number(payload.grade_pay);
+        } else {
+          delete payload.grade_pay;
+          delete payload.is_gazetted;
+        }
         await updateUser(editing.id, payload);
       }
       setEditing(null);
@@ -154,6 +174,26 @@ function AdminUsers() {
                 minLength={8}
               />
             </FormField>
+            {editing !== 'new' && editing.has_profile && (
+              <>
+                <FormField label="Grade pay (employee profile)">
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.grade_pay}
+                    onChange={(e) => updateField('grade_pay', e.target.value)}
+                  />
+                </FormField>
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.is_gazetted}
+                    onChange={(e) => updateField('is_gazetted', e.target.checked)}
+                  />
+                  Gazetted officer
+                </label>
+              </>
+            )}
           </div>
 
           <fieldset className="role-box">
@@ -201,6 +241,8 @@ function AdminUsers() {
               <th>Name</th>
               <th>Email</th>
               <th>Employee ID</th>
+              <th>Grade pay</th>
+              <th>Gazetted</th>
               <th>Roles</th>
               <th>Status</th>
               <th />
@@ -215,6 +257,8 @@ function AdminUsers() {
                   <td>{user.name}</td>
                   <td>{user.email}</td>
                   <td>{user.employee_id || '-'}</td>
+                  <td>{user.grade_pay || '-'}</td>
+                  <td>{user.has_profile ? (user.is_gazetted ? 'Yes' : 'No') : '-'}</td>
                   <td>{user.roles.map((role) => role.name).join(', ')}</td>
                   <td>
                     <span className={`badge ${user.is_active ? 'badge-vacant' : 'badge-under_maintenance'}`}>

@@ -75,9 +75,8 @@ function Applications() {
               <th>Type</th>
               <th>Station</th>
               <th>Status</th>
-              <th>Score</th>
-              <th>Rank</th>
-              <th>Applied</th>
+              <th>Waiting list rank</th>
+              <th>Registered on</th>
               <th />
             </tr>
           </thead>
@@ -98,7 +97,6 @@ function Applications() {
                   <td>
                     <StatusBadge status={application.status} />
                   </td>
-                  <td>{application.priority_score === null ? '-' : application.priority_score}</td>
                   <td>{rank || '-'}</td>
                   <td>{formatDate(application.applied_at)}</td>
                   <td>
